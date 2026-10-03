@@ -9,7 +9,7 @@ Static single-page promo site for WebsitePlz. No build tooling needed beyond Pyt
 ## Cloudflare Pages (production) - LIVE via Direct Upload
 - Project: `websiteplz` (https://websiteplz.pages.dev), account 4003c9642a148a5b37a27b76397886ce.
 - Custom domains: websiteplz.com, www.websiteplz.com (proxied CNAMEs -> websiteplz.pages.dev; apex is CNAME-flattened).
-- Redirect rules (Single Redirects): www.websiteplz.com -> https://websiteplz.com{path} 301 (query kept);
+- Redirect rules (Single Redirects): www.websiteplz.com -> https://websiteplz.com{path} 301 (query kept; /.well-known/ excluded so Pages SSL validation works);
   sitesplz.com + www.sitesplz.com (proxied placeholder A @ 192.0.2.1, CNAME www -> sitesplz.com) -> https://websiteplz.com{path} 301 (query kept).
 
 ### Redeploy
