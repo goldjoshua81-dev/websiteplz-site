@@ -1,0 +1,5 @@
+# Cloudflare Pages redirects (ignored by GitHub Pages).
+# Domain-level redirects (www -> apex, sitesplz.com -> websiteplz.com) are NOT done here;
+# use a Cloudflare Redirect Rule on each zone instead (see README.md).
+/samples  https://goldjoshua81-dev.github.io/contractor-samples/  302
+/index.html  /  301
