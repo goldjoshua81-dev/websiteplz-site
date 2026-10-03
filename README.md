@@ -6,11 +6,20 @@ Static single-page promo site for WebsitePlz. No build tooling needed beyond Pyt
 - `_headers` / `_redirects` are for Cloudflare Pages (ignored by GitHub Pages).
 - Preview: GitHub Pages. Production: Cloudflare Pages on websiteplz.com.
 
-## Cloudflare Pages (production)
-1. Cloudflare dashboard > Workers & Pages > Create > Pages > Connect to Git > pick `goldjoshua81-dev/websiteplz-site`.
-   Framework preset: None. Build command: (empty). Output directory: `/`.
-2. Project > Custom domains > add `websiteplz.com` and `www.websiteplz.com` (zone is on the same account, so DNS records are created automatically).
-3. www -> apex: Rules > Redirect Rules on the websiteplz.com zone: if hostname equals `www.websiteplz.com`, 301 to `https://websiteplz.com${uri}` (dynamic, preserve query string).
+## Cloudflare Pages (production) - LIVE via Direct Upload
+- Project: `websiteplz` (https://websiteplz.pages.dev), account 4003c9642a148a5b37a27b76397886ce.
+- Custom domains: websiteplz.com, www.websiteplz.com (proxied CNAMEs -> websiteplz.pages.dev; apex is CNAME-flattened).
+- Redirect rules (Single Redirects): www.websiteplz.com -> https://websiteplz.com{path} 301 (query kept);
+  sitesplz.com + www.sitesplz.com (proxied placeholder A @ 192.0.2.1, CNAME www -> sitesplz.com) -> https://websiteplz.com{path} 301 (query kept).
 
-## sitesplz.com -> websiteplz.com
-On the sitesplz.com zone: add proxied DNS records (A `@` 192.0.2.1 and CNAME `www` -> `sitesplz.com`, both orange-cloud; placeholder IP is never reached) then a Redirect Rule: "All incoming requests" -> dynamic 301 to `concat("https://websiteplz.com", http.request.uri.path)`, preserve query string. (Or use a Bulk Redirect list.)
+### Redeploy
+Wrangler 4 needs Node >= 22; on this box (Node 20) use wrangler@3.
+```bash
+cd /workspace/websiteplz-site && python3 build.py
+rm -rf /tmp/wplz-dist && mkdir /tmp/wplz-dist
+cp -r 404.html _headers _redirects apple-touch-icon.png favicon.ico favicon.svg img index.html robots.txt site.webmanifest sitemap.xml styles.css /tmp/wplz-dist/
+# needs CLOUDFLARE_API_TOKEN (Pages Edit) in env
+CLOUDFLARE_ACCOUNT_ID=4003c9642a148a5b37a27b76397886ce npx -y wrangler@3 pages deploy /tmp/wplz-dist --project-name websiteplz --branch main --commit-dirty=true
+git add -A && git commit -m "update" && git push   # keeps the GitHub repo in sync (GitHub Pages preview)
+```
+(build.py, README.md and preview*.png are intentionally not uploaded.)
