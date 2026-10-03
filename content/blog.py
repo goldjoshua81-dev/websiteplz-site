@@ -1,0 +1,23 @@
+"""Blog index. Article bodies live in content/blog/<slug>.html (HTML fragments; {root} = path to site root)."""
+POSTS = [
+ {"slug": "do-plumbers-need-a-website", "trade": "plumbing", "date": "2026-10-03",
+  "title": "Do Plumbers Need a Website? What It Should Actually Do",
+  "h1": "Do plumbers need a website? What it should actually do",
+  "desc": "Plenty of plumbers get by on referrals and a Google listing. Here's when a website pays for itself, and the few things it has to do to turn searches into calls."},
+ {"slug": "hvac-website-checklist", "trade": "hvac", "date": "2026-10-03",
+  "title": "What an HVAC Website Needs to Turn Searches Into Service Calls",
+  "h1": "What an HVAC website needs to turn searches into service calls",
+  "desc": "A practical checklist for HVAC company websites: the call button, services, trust signals, service area and local SEO basics that help homeowners pick you."},
+ {"slug": "electrician-website-what-homeowners-check", "trade": "electrical", "date": "2026-10-03",
+  "title": "Electrician Websites: What Homeowners Check Before They Call",
+  "h1": "Electrician websites: what homeowners check before they call",
+  "desc": "Homeowners hiring an electrician look for a license, clear services and real reviews. Here's how to put each one on your website, plus the local SEO basics."},
+ {"slug": "pressure-washing-website-get-booked", "trade": "pressure-washing", "date": "2026-10-03",
+  "title": "What a Pressure Washing Website Needs to Get Booked",
+  "h1": "What a pressure washing website needs to get booked",
+  "desc": "Before-and-after photos, a fast quote, clear prices and a service area. A practical guide to a pressure washing website that books jobs, not just likes."},
+ {"slug": "house-cleaning-website-more-clients", "trade": "cleaning", "date": "2026-10-03",
+  "title": "How to Get More House Cleaning Clients From Your Website",
+  "h1": "How to get more house cleaning clients from your website",
+  "desc": "Pricing, trust and easy booking: what a house cleaning website needs to turn local searches into recurring clients, plus the local SEO basics."},
+]

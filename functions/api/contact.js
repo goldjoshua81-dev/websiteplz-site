@@ -7,7 +7,7 @@
 // If neither binding exists the API answers 503 and the page shows the email fallback.
 // Optional env.RATE_KV (KV) makes the rate limit global instead of per-isolate.
 
-const LIMITS = { name: 100, business: 120, email: 160, phone: 40, trade: 40, website: 200, package: 40, message: 3000 };
+const LIMITS = { type: 20, name: 100, business: 120, email: 160, phone: 40, trade: 40, city: 100, listing: 300, website: 200, package: 40, message: 3000 };
 const TRADES = ["HVAC", "Plumbing", "Electrical", "Pressure washing", "House cleaning", "Other"];
 const PACKAGES = ["starter", "emergency", "emergency-care", "care-monthly", "care-quarterly", "care-yearly", "not-sure"];
 const RATE_MAX = 5;           // submissions
@@ -70,13 +70,21 @@ export async function onRequestPost({ request, env }) {
   for (const [k, max] of Object.entries(LIMITS)) d[k] = clean(raw[k], max);
   d.email = d.email.replace(/[\r\n]/g, "");
   const errors = [];
+  d.type = d.type === "mockup" ? "mockup" : "contact";
   if (!d.name) errors.push("name");
-  if (!d.business) errors.push("business name");
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(d.email)) errors.push("email");
-  if (!TRADES.includes(d.trade)) errors.push("trade");
-  if (d.package && !PACKAGES.includes(d.package)) d.package = "not-sure";
-  if (!d.package) d.package = "not-sure";
-  if (d.website && !/^(https?:\/\/)?[^\s]+\.[^\s]{2,}/i.test(d.website)) errors.push("current website");
+  if (!PACKAGES.includes(d.package)) d.package = d.type === "mockup" ? "" : "not-sure";
+  if (d.type === "mockup") {
+    // Free mockup: name, business, trade, city, email required; phone + listing optional.
+    if (!d.business) errors.push("business name");
+    if (!TRADES.includes(d.trade)) errors.push("trade");
+    if (!d.city) errors.push("city");
+  } else {
+    // Buy / ask a question: name + email, and a message unless a package was picked.
+    if (d.trade && !TRADES.includes(d.trade)) errors.push("trade");
+    if (d.package === "not-sure" && !d.message) errors.push("message");
+    if (d.website && !/^(https?:\/\/)?[^\s]+\.[^\s]{2,}/i.test(d.website)) errors.push("current website");
+  }
   if (d.phone && !/^[0-9+().\-\s x]{7,40}$/i.test(d.phone)) errors.push("phone");
   if (errors.length) return fail(`Please check: ${errors.join(", ")}.`);
 

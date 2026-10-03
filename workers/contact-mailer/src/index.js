@@ -15,14 +15,19 @@ export default {
     const d = await request.json();
     const PKG = { starter: "Starter Page ($249)", emergency: "Emergency-ready Site ($1,125)", "emergency-care": "Emergency-ready + 3 Months Care ($1,495)",
       "care-monthly": "Monthly Care ($99/mo)", "care-quarterly": "Quarterly Checkup ($249/quarter)", "care-yearly": "Annual Refresh ($990/yr)", "not-sure": "Not sure yet" };
-    const body = [
-      "New WebsitePlz inquiry", "",
-      `Name:      ${d.name}`, `Business:  ${d.business}`, `Trade:     ${d.trade}`,
+    const mock = d.type === "mockup";
+    const body = (mock ? [
+      "New FREE MOCKUP request", "",
+      `Name:      ${d.name}`, `Business:  ${d.business}`, `Trade:     ${d.trade}`, `City:      ${d.city}`,
+      `Email:     ${d.email}`, `Phone:     ${d.phone || "-"}`, `Site/listing: ${d.listing || "-"}`,
+    ] : [
+      "New WebsitePlz message", "",
+      `Name:      ${d.name}`, `Business:  ${d.business || "-"}`, `Trade:     ${d.trade || "-"}`,
       `Email:     ${d.email}`, `Phone:     ${d.phone || "-"}`, `Website:   ${d.website || "-"}`,
-      `Package:   ${PKG[d.package] || d.package}`, "", "Message:", d.message || "-", "",
-      `Received:  ${d.received_at}  (${d.country || "?"})`,
-    ].join("\r\n");
-    const subject = `New inquiry: ${d.business} (${d.trade})`;
+      `Package:   ${PKG[d.package] || d.package}`, "", "Message:", d.message || "-",
+    ]).concat(["", `Received:  ${d.received_at}  (${d.country || "?"})`]).join("\r\n");
+    const subject = mock ? `Free mockup request: ${d.business} (${d.trade}, ${d.city})`
+      : `${d.package && d.package !== "not-sure" ? "Package inquiry" : "Question"}: ${d.business || d.name}`;
     const mime = [
       `From: WebsitePlz form <${FROM}>`, `To: <${TO}>`,
       ...(/^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]{2,}$/.test(d.email || "") ? [`Reply-To: <${d.email}>`] : []),
