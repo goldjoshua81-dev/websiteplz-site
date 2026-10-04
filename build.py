@@ -20,7 +20,7 @@ CONFIG = {
          "blurb": "The full page built to turn visitors into calls.",
          "items": ["Everything in Starter", "Sticky call bar that stays on screen",
                    "4 of your photos", "Your 3 main services", "Reviews section",
-                   "Financing line + license & insured line", "Quote / book form",
+                   "Financing, license and insured lines", "Quote or booking form",
                    "2 revision rounds", "Live 5 days after assets arrive"]},
         {"id": "emergency-care", "name": "Emergency-ready + 3 Months Care", "price": 1495, "featured": False,
          "blurb": "The full site, plus we look after it for 3 months.",
@@ -169,6 +169,7 @@ def head(r, path, title, desc, og, jsonld, robots=""):
 <meta property="og:type" content="{'article' if path.startswith('blog/') and path != 'blog/' else 'website'}">
 <meta property="og:site_name" content="WebsitePlz">
 <meta property="og:title" content="{e(title)}">
+<meta property="og:locale" content="en_US">
 <meta property="og:description" content="{e(desc)}">
 <meta property="og:url" content="{url}">
 <meta property="og:image" content="{SITE}img/{og}">
@@ -375,18 +376,19 @@ def forms_section(r, trade_opt=""):
 """
 
 FORM_JS = """<script>
-(function(){var fallback='Sorry, the form could not be sent right now. Please email us at <a href="__MAILTO__">__EMAIL__</a>.';
+(function(){function lab(el){var l=el.closest('label');return l&&l.firstChild&&l.firstChild.nodeType===3?l.firstChild.textContent.replace(/\\s*\\(.*$/,'').trim():el.name;}
+function fallback(f){var L=[];Array.prototype.forEach.call(f.querySelectorAll('input,select,textarea'),function(el){if(el.type==='hidden'||el.name==='company_fax'||!el.value.trim())return;var n=lab(el);var v=el.tagName==='SELECT'?el.options[el.selectedIndex].text:el.value.trim();L.push(n+': '+v);});var sub=f.type.value==='mockup'?'Free mockup request':'Website question';var href='mailto:__EMAIL__?subject='+encodeURIComponent(sub)+'&body='+encodeURIComponent(L.join('\\n'));return 'Our form is not taking messages right now, so nothing was sent. <a href="'+href.replace(/"/g,'%22')+'">Email your details instead</a> (we prefill it for you) or write to <a href="__MAILTO__">__EMAIL__</a>.';}
 document.addEventListener('click',function(ev){var a=ev.target.closest&&ev.target.closest('[data-package]');if(!a)return;var s=document.querySelector('#contact .f-package');if(s)s.value=a.getAttribute('data-package');});
 Array.prototype.forEach.call(document.querySelectorAll('.js-form'),function(f){var st=f.querySelector('.form-status'),btn=f.querySelector('button[type=submit]');f.t.value=Date.now();
 function show(m,ok){st.className='form-status '+(ok?'ok':'err');st.innerHTML=m;st.focus();}
 f.addEventListener('submit',function(ev){ev.preventDefault();var bad=null;
  Array.prototype.forEach.call(f.querySelectorAll('input,select,textarea'),function(el){el.removeAttribute('aria-invalid');if(el.type!=='hidden'&&!el.checkValidity()){el.setAttribute('aria-invalid','true');bad=bad||el;}});
  if(f.message&&f.package&&f.package.value==='not-sure'&&!f.message.value.trim()){f.message.setAttribute('aria-invalid','true');bad=bad||f.message;}
- if(bad){show('Please check the highlighted fields.',false);bad.focus();return;}
+ if(bad){var names=[];Array.prototype.forEach.call(f.querySelectorAll('[aria-invalid=true]'),function(el){var n=lab(el);if(names.indexOf(n)<0)names.push(n);});show('Please check: '+names.join(', ')+'.',false);bad.focus();return;}
  btn.disabled=true;btn.textContent='Sending...';
  fetch(f.action,{method:'POST',headers:{'Accept':'application/json'},body:new FormData(f)}).then(function(r){return r.json().catch(function(){return {ok:false};}).then(function(d){return [r,d];});})
- .then(function(x){var r=x[0],d=x[1];if(r.ok&&d.ok){f.reset();f.t.value=Date.now();show(f.type.value==='mockup'?'Thanks! We\\u2019ve got your details and will email you about your free mockup.':'Thanks! Your message is in. We\\u2019ll reply by email soon.',true);}else{show(r.status<500&&d.error?d.error:fallback,false);}})
- .catch(function(){show(fallback,false);}).then(function(){btn.disabled=false;btn.textContent=btn.getAttribute('data-label');});
+ .then(function(x){var r=x[0],d=x[1];if(r.ok&&d.ok){f.reset();f.t.value=Date.now();show(f.type.value==='mockup'?'Thanks! We\\u2019ve got your details and will email you about your free mockup.':'Thanks! Your message is in. We\\u2019ll reply by email soon.',true);}else{show(r.status<500&&d.error?d.error:fallback(f),false);}})
+ .catch(function(){show(fallback(f),false);}).then(function(){btn.disabled=false;btn.textContent=btn.getAttribute('data-label');});
 });});})();
 </script>
 """.replace("__MAILTO__", mailto).replace("__EMAIL__", C["contact_email"])
@@ -396,7 +398,7 @@ INCLUDED = [
     ("image", "Your logo and photos", "Your brand, your trucks, your crew. Phone photos are fine."),
     ("list", "Your main services", "Clear cards for the jobs you want more of."),
     ("star", "Real reviews", "Reviews from your own customers, styled to build trust."),
-    ("shield", "License, insured and financing lines", "The details homeowners check before they call."),
+    ("shield", "License, insured and financing lines", "The details customers check before they reach out."),
     ("form", "Quote or booking form", "For customers who would rather type than talk."),
     ("pin", "Cities you serve", "Your service area, spelled out so the right people call."),
     ("gauge", "Fast on phones", "A hand-built static page with no plugins slowing it down."),
@@ -419,7 +421,7 @@ def sample_card(r, slug, name, niche, trade):
             f'<div class="sample-body"><span class="tag">{ic(icon)}{niche}</span><h3>{name}</h3>'
             f'<p class="muted small">Fictional demo company</p>'
             f'<div class="sample-links"><a class="text-link" href="{url}" target="_blank" rel="noopener">View live demo<span class="sr-only"> of {name} (opens in a new tab)</span> {ic("arrow")}</a>'
-            f'<a class="text-link quiet" href="{r}{trade}/">{TBY[trade]["label"]} websites<span class="sr-only">: our page for {TBY[trade]["label"].lower()} businesses</span></a></div></div></article>')
+            f'<a class="text-link quiet" href="{r}{trade}/">{TBY[trade]["label"]} websites<span class="sr-only">: our page for {TBY[trade]["noun"]} businesses</span></a></div></div></article>')
 
 def blog_cards(r, posts):
     return "".join(f'<article class="post-card"><span class="tag">{ic(TBY[p["trade"]]["icon"])}{TBY[p["trade"]]["label"]}</span>'
@@ -503,9 +505,9 @@ def blog_teaser(r, posts, h="From the blog", sub="Practical guides to getting mo
 
 def build_home():
     r = ""
-    title = "WebsitePlz | Websites that make the phone ring for local service pros"
-    desc = (f"Phone-first websites for HVAC, plumbing, electrical, pressure washing and house cleaning businesses. "
-            f"Click-to-call, your services and cities, live on your own domain in 5 days. From {money(lowest)}.")
+    title = "WebsitePlz | Websites That Make the Phone Ring"
+    desc = (f"Phone-first websites for HVAC, plumbing, electrical, pressure washing and cleaning pros. "
+            f"Click-to-call, live on your domain in 5 days. From {money(lowest)}.")
     jsonld = {"@context": "https://schema.org", "@graph": [
         ORG,
         {"@type": "WebSite", "@id": SITE + "#website", "url": SITE, "name": "WebsitePlz", "publisher": {"@id": SITE + "#org"}},
@@ -552,7 +554,7 @@ def build_trade(t):
     post = next(p for p in POSTS if p["slug"] == t["blog"])
     jsonld = {"@context": "https://schema.org", "@graph": [
         ORG,
-        {"@type": "Service", "name": f'Websites for {t["label"].lower()} businesses', "serviceType": "Website design",
+        {"@type": "Service", "name": f'Websites for {t["noun"]} businesses', "serviceType": "Website design",
          "url": SITE + path, "provider": {"@id": SITE + "#org"}, "description": t["desc"],
          "offers": [{"@type": "Offer", "name": x["name"], "price": x["price"], "priceCurrency": "USD"} for x in C["tiers"]]},
         {"@type": "FAQPage", "mainEntity": [{"@type": "Question", "name": q, "acceptedAnswer": {"@type": "Answer", "text": strip(a)}} for q, a in faq]},
@@ -560,7 +562,7 @@ def build_trade(t):
             {"@type": "ListItem", "position": 1, "name": "Home", "item": SITE},
             {"@type": "ListItem", "position": 2, "name": f'{t["label"]} websites', "item": SITE + path}]},
     ]}
-    pains = "".join(f'<article class="card pain"><span class="ico">{ic(["clock","phone","list"][i])}</span><h3>{e(h)}</h3><p>{e(p)}</p></article>' for i, (h, p) in enumerate(t["pains"]))
+    pains = "".join(f'<article class="card pain"><span class="ico">{ic(t["pain_icons"][i])}</span><h3>{e(h)}</h3><p>{e(p)}</p></article>' for i, (h, p) in enumerate(t["pains"]))
     pts = "".join(f'<li>{ic("check")}<span>{x}</span></li>' for x in t["demo_points"])
     demo_url = C["samples_base"] + t["demo"] + "/"
     others = "".join(f'<li><a href="{r}{o["slug"]}/">{ic(o["icon"])}{o["label"]}</a></li>' for o in TRADES if o is not t)
@@ -578,7 +580,7 @@ def build_trade(t):
       {three_paths(r, "trade")}
       <ul class="trust"><li>{ic("check")}From {money(lowest)}</li><li>{ic("check")}Live in 5 days</li><li>{ic("check")}You own your domain</li></ul>
     </div>
-    {device(r, t["demo"], t["demo_name"], True, note=t["demo_note"])}
+    {device(r, t["demo"], t["demo_name"], True, note=t.get("hero_note", "Demo site for a fictional company."))}
   </div>
 </section>
 
@@ -600,7 +602,7 @@ def build_trade(t):
     </div>
   </div>
 </section>
-{included_section(t["includes"], h=f'What your {t["label"].lower()} site includes', sub="Everything homeowners look for before they call, built around your trade.")}{how_section()}{pricing_sections()}{faq_section(faq, h=f'{t["label"]} website questions')}
+{included_section(t["includes"], h=f'What your {t["noun"]} site includes', sub=t["included_sub"])}{how_section()}{pricing_sections()}{faq_section(faq, h=f'{t["label"]} website questions')}
 <section class="section alt" id="blog">
   <div class="wrap">
     <div class="head"><p class="kicker">Guide</p><h2>Read before you build</h2></div>
@@ -618,8 +620,8 @@ def build_trade(t):
 def build_blog_index():
     r = "../"
     path = "blog/"
-    title = "Blog: Websites and Local SEO for Service Businesses | WebsitePlz"
-    desc = "Practical guides for HVAC, plumbing, electrical, pressure washing and house cleaning businesses on getting more calls from your website and Google listing."
+    title = "Websites and Local SEO for Service Pros | WebsitePlz Blog"
+    desc = "Practical guides for HVAC, plumbing, electrical, pressure washing and cleaning businesses on getting more calls from your website and Google listing."
     jsonld = {"@context": "https://schema.org", "@graph": [ORG,
         {"@type": "Blog", "name": "WebsitePlz Blog", "url": SITE + path, "publisher": {"@id": SITE + "#org"},
          "blogPost": [{"@type": "BlogPosting", "headline": p["title"], "url": f'{SITE}blog/{p["slug"]}/', "datePublished": p["date"]} for p in POSTS]},
@@ -671,7 +673,7 @@ def build_post(p):
             {"@type": "ListItem", "position": 3, "name": p["h1"], "item": SITE + path}]}]}
     related = [x for x in POSTS if x is not p][:2]
     nice_date = datetime.date.fromisoformat(p["date"]).strftime("%B %-d, %Y")
-    page = head(r, path, f'{p["title"]} | WebsitePlz', p["desc"], f'og-{p["trade"]}.png', jsonld) + header(r, "blog") + f"""
+    page = head(r, path, p["title"] if len(p["title"]) > 47 else f'{p["title"]} | WebsitePlz', p["desc"], f'og-{p["trade"]}.png', jsonld) + header(r, "blog") + f"""
 <main id="main">
 <article class="post">
   <header class="hero page-hero">
@@ -683,7 +685,7 @@ def build_post(p):
   </header>
   <div class="wrap narrow prose">
 {body}
-    <aside class="post-cta"><b>See it on a real page</b><p>Our {t["label"].lower()} layout puts all of this on one fast, phone-first page.</p>
+    <aside class="post-cta"><b>See it on a real page</b><p>Our {t["noun"]} layout puts all of this on one fast, phone-first page.</p>
       <div class="cta-row"><a class="btn btn-primary" href="{r}{t["slug"]}/">{t["label"]} websites {ic("arrow")}</a><a class="btn btn-outline" href="{r}#mockup">Get a free mockup</a></div></aside>
   </div>
 </article>
@@ -706,6 +708,23 @@ def build_meta():
     (ROOT / f"{k}.txt").write_text(k)
     return urls
 
+def write_headers():
+    import base64, hashlib, re as _re
+    js = _re.search(r"<script>(.*?)</script>", FORM_JS, _re.S).group(1)
+    h = base64.b64encode(hashlib.sha256(js.encode()).digest()).decode()
+    csp = ("default-src 'self'; script-src 'self' 'sha256-" + h + "'; style-src 'self' 'unsafe-inline'; "
+           "img-src 'self' data:; font-src 'self'; connect-src 'self'; form-action 'self' mailto:; "
+           "frame-ancestors 'none'; base-uri 'self'; object-src 'none'; upgrade-insecure-requests")
+    (ROOT / "_headers").write_text(
+        "# Cloudflare Pages headers (generated by build.py; ignored by GitHub Pages)\n"
+        "/*\n  X-Content-Type-Options: nosniff\n  Referrer-Policy: strict-origin-when-cross-origin\n"
+        "  X-Frame-Options: DENY\n  Permissions-Policy: camera=(), microphone=(), geolocation=()\n"
+        "  Strict-Transport-Security: max-age=31536000\n  Cross-Origin-Opener-Policy: same-origin\n"
+        f"  Content-Security-Policy: {csp}\n"
+        "/img/*\n  Cache-Control: public, max-age=604800\n/*.css\n  Cache-Control: public, max-age=86400\n"
+        "https://websiteplz.pages.dev/*\n  X-Robots-Tag: noindex\n"
+        "https://:project.websiteplz.pages.dev/*\n  X-Robots-Tag: noindex\n")
+
 if __name__ == "__main__":
     bust_css()
     nf = ROOT / "404.html"
@@ -715,4 +734,5 @@ if __name__ == "__main__":
     build_blog_index()
     for p in POSTS: build_post(p)
     urls = build_meta()
+    write_headers()
     print(f"wrote {len(PAGES)} pages:", ", ".join("/" + u for u in urls))
