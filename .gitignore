@@ -1,2 +1,8 @@
 preview.png
 __pycache__/
+# private mockups: prospect data must never reach the public repo
+m/
+content/mockups/*.json
+!content/mockups/_sample-*.json
+content/mockups/img/*
+!content/mockups/img/sample-*

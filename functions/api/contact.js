@@ -7,7 +7,7 @@
 // If neither binding exists the API answers 503 and the page shows the email fallback.
 // Optional env.RATE_KV (KV) makes the rate limit global instead of per-isolate.
 
-const LIMITS = { type: 20, name: 100, business: 120, email: 160, phone: 40, trade: 40, city: 100, listing: 300, website: 200, package: 40, message: 3000 };
+const LIMITS = { type: 20, name: 100, business: 120, email: 160, phone: 40, trade: 40, city: 100, listing: 300, website: 200, package: 40, message: 3000, services: 200, referred_by: 120 };
 const TRADES = ["HVAC", "Plumbing", "Electrical", "Pressure washing", "House cleaning", "Other"];
 const PACKAGES = ["starter", "emergency", "emergency-care", "care-monthly", "care-quarterly", "care-yearly", "not-sure"];
 const RATE_MAX = 5;           // submissions
@@ -60,7 +60,7 @@ export async function onRequestPost({ request, env }) {
   // Pretend success so bots don't learn anything.
   const started = parseInt(raw.t || "0", 10);
   if (clean(raw.company_fax, 200) || (started && Date.now() - started < 3000)) {
-    return wantsJson ? json({ ok: true }) : htmlPage("Thanks!", "Your details are in. We'll reply by email soon.", 200);
+    return wantsJson ? json({ ok: true }) : htmlPage("Thanks!", "Your details are in. I'll reply by email within 1 business day.", 200);
   }
 
   const ip = request.headers.get("cf-connecting-ip") || "unknown";
@@ -71,11 +71,12 @@ export async function onRequestPost({ request, env }) {
   d.email = d.email.replace(/[\r\n]/g, "");
   const errors = [];
   d.type = d.type === "mockup" ? "mockup" : "contact";
-  if (!d.name) errors.push("name");
+  // Name is optional on the free mockup form (M-2); required for messages.
+  if (!d.name && d.type !== "mockup") errors.push("name");
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(d.email)) errors.push("email");
   if (!PACKAGES.includes(d.package)) d.package = d.type === "mockup" ? "" : "not-sure";
   if (d.type === "mockup") {
-    // Free mockup: name, business, trade, city, email required; phone + listing optional.
+    // Free mockup: business, trade, city, email required; name, phone, listing, services, referred_by optional.
     if (!d.business) errors.push("business name");
     if (!TRADES.includes(d.trade)) errors.push("trade");
     if (!d.city) errors.push("city");
@@ -113,7 +114,7 @@ export async function onRequestPost({ request, env }) {
     return fail("We couldn't send your details.", 502);
   }
 
-  return wantsJson ? json({ ok: true }) : htmlPage("Thanks!", "Your details are in. We'll reply by email soon.", 200);
+  return wantsJson ? json({ ok: true }) : htmlPage("Thanks!", "Your details are in. I'll reply by email within 1 business day.", 200);
 }
 
 export async function onRequest({ request }) {

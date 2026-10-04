@@ -1,4 +1,6 @@
 User-agent: *
 Allow: /
+Disallow: /m/
+Disallow: /thanks/
 
 Sitemap: https://websiteplz.com/sitemap.xml

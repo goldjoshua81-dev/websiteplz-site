@@ -5,7 +5,7 @@ EDIT PRICES, CONTACT AND CHECKOUT LINKS IN CONFIG BELOW ONLY. Then run:  python3
 Every price on every page (hero, pricing, care plans, FAQ, JSON-LD) is rendered from CONFIG.
 Trade copy lives in content/trades.py; blog posts in content/blog.py + content/blog/<slug>.html.
 """
-import datetime, html, json, pathlib, re, sys
+import datetime, html, json, pathlib, re, sys, urllib.parse
 
 CONFIG = {
     "site_url": "https://websiteplz.com/",
@@ -14,20 +14,27 @@ CONFIG = {
         {"id": "starter", "name": "Starter Page", "price": 249, "featured": False,
          "blurb": "Get online fast with a clean, phone-first page.",
          "items": ["One-page site on your domain", "Your logo, phone and cities",
-                   "2 of your photos", "Click-to-call button", "Quote form",
+                   "2 of your photos", "Click-to-call button and sticky call bar", "Quote form",
                    "1 revision round", "Live 5 days after assets arrive"]},
         {"id": "emergency", "name": "Emergency-ready Site", "price": 1125, "featured": True,
          "blurb": "The full page built to turn visitors into calls.",
-         "items": ["Everything in Starter", "Sticky call bar that stays on screen",
+         "items": ["Everything in Starter",
                    "4 of your photos", "Your 3 main services", "Reviews section",
                    "Financing, license and insured lines", "Quote or booking form",
                    "2 revision rounds", "Live 5 days after assets arrive"]},
-        {"id": "emergency-care", "name": "Emergency-ready + 3 Months Care", "price": 1495, "featured": False,
-         "blurb": "The full site, plus we look after it for 3 months.",
-         "items": ["Everything in Emergency-ready", "3 months of hosting included",
-                   "2 small edits a month", "Monthly call-button and form test",
-                   "Then Monthly Care at {care_monthly}/mo, optional"]},
+        {"id": "emergency-care", "name": "Emergency-ready + 6 Months Care", "price": 1495, "featured": False,
+         "care_months": 6, "base": "emergency",
+         "blurb": "The full site, plus 6 months of Care so you don't have to think about it.",
+         "items": ["Everything in Emergency-ready",
+                   "6 months of Monthly Care included: hosting, SSL, form, 2 small edits a month",
+                   "Monthly call-button and form test",
+                   "After month 6, Care continues only if you opt in. Nothing auto-renews."]},
     ],
+    # --- OFFER (upgrade_build_list.md section 1, approved Oct 4, 2026) --------
+    "deposit_pct": 50,                       # Buy now charges this % today; the rest at launch
+    "featured_label": "Our pick for most owners",
+    "guarantee_name": "See-It-First Guarantee",
+    "mockup_days": 14,                       # private mockup links really expire after this (MP-3)
     "care": {"monthly": 99, "quarterly": 249, "yearly": 990},
     # --- CONTACT -------------------------------------------------------------
     # hello@ forwards to Joshua's Gmail via Cloudflare Email Routing.
@@ -35,9 +42,20 @@ CONFIG = {
     # TODO: paste profile URLs once Joshua's accounts exist; empty = hidden.
     "fiverr_url": "",
     "contra_url": "",
+    # --- FEATURE FLAGS for things Joshua still has to provide (see README "Switching on") ----
+    # BL-1 form delivery: False = forms skip the network call and go straight to the prefilled-email
+    # fallback (no 503 errors). Set True once the MAILER (or SUBMISSIONS) binding is live on Pages.
+    "form_delivery_live": False,
+    # BL-3 postal address (P.O. box) for the footer; empty = hidden.
+    "postal_address": "",
+    # BL-4 founder photo, e.g. "img/joshua.jpg" (real photo, square, 600px+); empty = text-only block.
+    "founder_photo": "",
+    # BL-5 intro video URL (Loom/YouTube link, opens in a new tab; no iframes); empty = hidden.
+    "founder_video_url": "",
     # --- CHECKOUT (Stripe Payment Links, being set up) ------------------------
-    # Paste a checkout URL per package.
-    # Empty = the Buy button scrolls to the contact form with that package preselected.
+    # BL-2: paste a Stripe Payment Link per package (deposit amount for the 3 site packages).
+    # Empty = "Buy now" scrolls to the contact form with that package preselected (and on /m/ pages
+    # opens a prefilled email). Set = "Pay $X to start" opens Stripe. Success URL: /thanks/order/.
     "checkout_links": {
         "starter": "",
         "emergency": "",
@@ -63,6 +81,15 @@ q_per_mo = round(care_q / 3)
 y_save = care_m * 12 - care_y
 y_pct = round(100 * y_save / (care_m * 12))
 lowest = min(t["price"] for t in C["tiers"])
+def money2(x): return f"${x:,.2f}"
+def deposit(price): return price * C["deposit_pct"] / 100
+def balance(price): return price - deposit(price)
+TIER = {t["id"]: t for t in C["tiers"]}
+def care_saving(t):
+    """Only for bundles with care_months: (site + months x Monthly Care) - bundle price."""
+    return TIER[t["base"]]["price"] + t["care_months"] * care_m - t["price"] if t.get("care_months") else 0
+GUAR = C["guarantee_name"]
+GUAR_TEXT = "You see your site before it goes live. If you don't love it, tell me before launch and I'll refund everything you've paid."
 e = html.escape
 SITE = C["site_url"]
 ROOT = pathlib.Path(__file__).parent
@@ -80,17 +107,26 @@ SAMPLES = [
 
 FAQ = [
     ("How fast is it?", "Your site is live 5 days after you send your logo, phone number, cities and photos. The clock starts when your assets arrive."),
-    ("What's the free mockup?", "Send your business name, trade and city, and we'll make a mockup of your homepage so you can see it before you pay anything. No cost, no obligation."),
-    ("Do I need a domain?", "Yes. The site goes on your own domain (about $15 a year), which you pay for and own. We walk you through connecting it."),
+    ("What's the free mockup?", f"Send your business name, trade and city, and I'll make a mockup of your homepage within 1 business day. You get a private link that stays up for {C['mockup_days']} days. No cost, no card."),
+    ("What if I don't like it?", f"You see the full site before it goes live. If you don't love it, tell me before launch and I'll refund everything you've paid. That's the {GUAR}."),
+    ("What do I pay today?", f"Half. {money2(deposit(TIER['starter']['price']))} for Starter, {money2(deposit(TIER['emergency']['price']))} for Emergency-ready, {money2(deposit(TIER['emergency-care']['price']))} for the 6-month Care package. The rest is due at launch, after you've approved your site. The free mockup costs nothing."),
+    ("Why is this cheaper than an agency?", "It's one page, built for one job: getting calls. No retainers, no long contract, no software license. You pay once and own it."),
+    ("Will this put me at the top of Google?", 'No website can promise that. Google ranks local results on relevance, distance and prominence, and your Google Business Profile matters most. Your site helps by matching your profile and loading fast. <a href="https://support.google.com/business/answer/7091" rel="noopener">Google\'s own explanation</a>.'),
+    ("Do I need a domain?", "Yes. The site goes on your own domain (about $15 a year), which you pay for and own. I walk you through connecting it."),
     ("Can you use my Facebook photos and reviews?", "Yes, as long as they're yours. Real reviews only."),
     ("Is it WordPress?", "No. It's a hand-built static page: faster, with no plugins to update and far less that can break or get hacked."),
-    ("Are there monthly fees?", f"Only if you want Care. Monthly Care is {money(care_m)}/mo for hosting plus 2 small edits a month. Without Care, we hand the site off to your own host."),
+    ("Are there monthly fees?", f"Only if you want Care. Monthly Care is {money(care_m)}/mo for hosting plus 2 small edits a month. Without Care, I hand the site off to your own host."),
     ("How many revisions do I get?", "Starter includes 1 round, the other packages include 2. A revision is a change to what's on the page, not a new design."),
-    ("Do you do SEO or ads?", "We don't sell SEO packages or run ads. Every site ships with the basics done right: a clear title and description, your services and cities on the page, local business markup and a fast, mobile-friendly build. Your Google Business Profile and ads send the traffic."),
+    ("Do you do SEO or ads?", "I don't sell SEO packages or run ads. Every site ships with the basics done right: a clear title and description, your services and cities on the page, local business markup and a fast, mobile-friendly build. Your Google Business Profile and ads send the traffic."),
     ("What counts as a small edit?", "Anything that takes 15 minutes or less: text, hours, a price or a photo swap. Bigger changes are quoted separately, and unused edits don't roll over."),
-    ("Who owns the site?", "You do. You own your domain, your content and the final page files once paid in full."),
+    ("Who owns the site?", "You do. You own your domain, your content and the final page files once paid in full. Leave any time and take everything with you."),
 ]
-FAQ_TRADE_SHARED = [FAQ[0], FAQ[1], FAQ[5], FAQ[9]]
+_FQ = dict(FAQ)
+FAQ_TRADE_SHARED = [(q, _FQ[q]) for q in ("How fast is it?", "What's the free mockup?", "What if I don't like it?",
+                                          "What do I pay today?", "Are there monthly fees?", "Who owns the site?")]
+def booking(text, slug):
+    """Cleaning and pressure washing say Booking-ready instead of Emergency-ready."""
+    return text.replace("Emergency-ready", "Booking-ready") if slug in BOOKING_TRADES else text
 
 ICONS = {
  "flame": '<path d="M12 3c.5 3.2 4.5 5.4 4.5 9.6A4.5 4.5 0 0 1 12 17a4.5 4.5 0 0 1-4.5-4.4c0-1.8.9-3.1 2-4 .1 1.6.9 2.6 1.9 2.9C11 9 11.2 5.6 12 3Z"/><path d="M5 21h14"/>',
@@ -134,7 +170,7 @@ PACKAGES = [(t["id"], f'{t["name"]} ({money(t["price"])})') for t in C["tiers"]]
 BOOKING_TRADES = {"cleaning", "pressure-washing"}
 def tiers_for(slug=None):
     if slug not in BOOKING_TRADES: return C["tiers"]
-    return [dict(t, name=t["name"].replace("Emergency-ready", "Booking-ready"),
+    return [dict(t, name=booking(t["name"], slug),
                  items=[x.replace("Emergency-ready", "Booking-ready").replace("Financing, license and insured lines", "Financing and insured/bonded lines") for x in t["items"]]) for t in C["tiers"]]
 def packages_for(slug=None):
     return [(t["id"], f'{t["name"]} ({money(t["price"])})') for t in tiers_for(slug)] + PACKAGES[len(C["tiers"]):]
@@ -143,11 +179,15 @@ ORG = {"@type": "Organization", "@id": SITE + "#org", "name": "WebsitePlz", "url
        "logo": SITE + "img/icon-512.png", "email": C["contact_email"]}
 
 # ---------------------------------------------------------------- components
-def buy_btn(pid, name, cls, label="Buy now"):
+def buy_btn(pid, name, cls, label="Buy now", paid_label=None, fallback_href=None, fallback_label=None):
+    """Stripe link set: paid_label (e.g. "Pay $562.50 to start"), same tab.
+    Not set: scroll to #contact with the package preselected, or fallback_href (mailto on /m/ pages)."""
     url = C["checkout_links"].get(pid, "")
     sr = f'<span class="sr-only">: {e(name)}</span>'
     if url:
-        return f'<a class="btn {cls} btn-block" href="{e(url)}" rel="noopener">{label}{sr}</a>'
+        return f'<a class="btn {cls} btn-block" href="{e(url)}">{paid_label or label}{sr}</a>'
+    if fallback_href:
+        return f'<a class="btn {cls} btn-block" href="{e(fallback_href)}">{fallback_label or label}{sr}</a>'
     return f'<a class="btn {cls} btn-block" href="#contact" data-package="{pid}">{label}{sr}</a>'
 
 def browser(r, slug, name, eager=False, label="Sample site", sizes="(min-width:1024px) 560px, (min-width:768px) 46vw, 92vw"):
@@ -209,7 +249,8 @@ def header(r, here):
     sec = "" if here in ("", "trade") else r      # same-page anchors vs. links to home
     pr = "#pricing" if here in ("", "trade") else f"{r}#pricing"
     links = [(f"{r}#trades" if here else "#trades", "Trades"), (f"{r}#samples" if here else "#samples", "Our work"),
-             (pr, "Pricing"), (f"{r}blog/", "Blog"), (f"{sec}#faq" if here != "blog" else f"{r}#faq", "FAQ")]
+             (pr, "Pricing"), ("#guarantee" if here in ("", "trade") else f"{r}#guarantee", "Guarantee"),
+             (f"{r}blog/", "Blog"), (f"{sec}#faq" if here != "blog" else f"{r}#faq", "FAQ")]
     nav = "".join(f'<a href="{h}"{" aria-current=page" if (t == "Blog" and here == "blog") else ""}>{t}</a>' for h, t in links)
     cta = "#mockup" if here in ("", "trade") else f"{r}#mockup"
     return f"""<header class="top">
@@ -221,80 +262,148 @@ def header(r, here):
 </header>
 """
 
-def footer(r, here):
+def footer(r, here, bar=True):
     pr = "#pricing" if here in ("", "trade") else f"{r}#pricing"
     trades = "".join(f'<a href="{r}{t["slug"]}/">{t["label"]} websites</a>' for t in TRADES)
     posts = "".join(f'<a href="{r}blog/{p["slug"]}/">{e(p["h1"][:1].upper() + p["h1"][1:])}</a>' for p in POSTS[:3])
     mob_buy = pr
     mob_mock = "#mockup" if here in ("", "trade") else f"{r}#mockup"
-    return f"""<footer class="foot">
+    plat = ""
+    if C["fiverr_url"]: plat += f'<a href="{e(C["fiverr_url"])}" rel="noopener">Find me on Fiverr</a>'
+    if C["contra_url"]: plat += f'<a href="{e(C["contra_url"])}" rel="noopener">Hire me on Contra</a>'
+    plat = f'<p class="foot-plat">{plat}</p>' if plat else ""
+    addr = f'<p class="foot-addr">{e(C["postal_address"])}</p>' if C["postal_address"] else ""
+    mbar = (f'<div class="mobile-bar mbar"><a class="btn btn-outline btn-block" href="{mob_buy}">Buy now</a>'
+            f'<a class="btn btn-primary btn-block" href="{mob_mock}">Free mockup</a></div>\n') if bar else ""
+    return f"""<footer class="foot{'' if bar else ' nobar'}">
   <div class="wrap foot-grid">
-    <div class="foot-brand"><img src="{r}img/logo-light.svg" width="151" height="36" alt="WebsitePlz" loading="lazy"><p>Phone-first websites for local service businesses.</p>
-      <p><a href="mailto:{C['contact_email']}">{e(C['contact_email'])}</a></p></div>
+    <div class="foot-brand"><img src="{r}img/logo-light.svg" width="151" height="36" alt="WebsitePlz" loading="lazy"><p>Phone-first websites for local service businesses. Built by Joshua Gold, by hand.</p>
+      <p><a href="{r}#guarantee">Every site comes with the {GUAR}. Your domain, your files, your site.</a></p>
+      <p><a href="mailto:{C['contact_email']}">{e(C['contact_email'])}</a></p>{addr}{plat}</div>
     <nav class="foot-col" aria-label="Trades"><b>Trades</b>{trades}</nav>
-    <nav class="foot-col" aria-label="Company"><b>WebsitePlz</b><a href="{r or './'}">Home</a><a href="{r}#samples">Our work</a><a href="{pr}">Pricing</a><a href="{r}#care">Care plans</a><a href="{r}#faq">FAQ</a><a href="{r}#mockup">Free mockup</a><a href="{r}#contact">Contact</a></nav>
-    <nav class="foot-col" aria-label="Blog"><b>Blog</b>{posts}<a href="{r}blog/">All articles</a></nav>
+    <nav class="foot-col" aria-label="Company"><b>WebsitePlz</b><a href="{r or './'}">Home</a><a href="{r}#samples">Our work</a><a href="{pr}">Pricing</a><a href="{r}#guarantee">Guarantee</a><a href="{r}#care">Care plans</a><a href="{r}#faq">FAQ</a><a href="{r}#mockup">Free mockup</a><a href="{r}#contact">Contact</a></nav>
+    <nav class="foot-col" aria-label="Blog"><b>Blog</b>{posts}<a href="{r}blog/">All articles</a><a href="{r}guides/google-business-profile-checklist/">Free: GBP Tune-Up Checklist</a></nav>
   </div>
   <div class="wrap foot-fine">
+    <nav class="foot-legal" aria-label="Legal"><a href="{r}terms/">Terms</a><a href="{r}privacy/">Privacy</a><a href="{r}refunds/">Refunds and Guarantee</a><a href="{r}refunds/#care">Care and cancellation</a></nav>
     <p>Sample sites shown are fictional demo companies. Phone numbers, licenses, photos and reviews on them are placeholders.</p>
     <p>&copy; 2026 WebsitePlz</p>
   </div>
 </footer>
-<div class="mobile-bar mbar"><a class="btn btn-outline btn-block" href="{mob_buy}">Buy now</a><a class="btn btn-primary btn-block" href="{mob_mock}">Free mockup</a></div>
-"""
+{mbar}"""
 
-def three_paths(r, here="", light=True):
+def three_paths(r, here="", light=True, label="Get a free mockup"):
     """Buy now / Get a free mockup / Ask a question."""
     pr = "#pricing" if here in ("", "trade") else f"{r}#pricing"
     mk = "#mockup" if here in ("", "trade") else f"{r}#mockup"
     ct = "#contact" if here in ("", "trade") else f"{r}#contact"
     q = "btn-outline-light" if light else "btn-outline"
-    return (f'<div class="cta-row paths"><a class="btn btn-primary btn-lg" href="{mk}">Get a free mockup {ic("arrow")}</a>'
+    return (f'<div class="cta-row paths"><a class="btn btn-primary btn-lg" href="{mk}">{label} {ic("arrow")}</a>'
             f'<a class="btn {q} btn-lg" href="{pr}">Buy now</a>'
             f'<a class="text-link {"on-dark" if light else ""}" href="{ct}">Ask a question</a></div>')
 
-def tier_html(t):
+def tier_html(t, fallback_href=None):
     items = "".join(f"<li>{ic('check')}<span>{x.format(care_monthly=money(care_m))}</span></li>" for x in t["items"])
     cls = "tier featured" if t["featured"] else "tier"
-    badge = '<span class="badge">Most popular</span>' if t["featured"] else ""
+    badge = f'<span class="badge">{e(C["featured_label"])}</span>' if t["featured"] else ""
+    dep, bal = deposit(t["price"]), balance(t["price"])
+    save = care_saving(t)
+    save = (f'<p class="tier-save">Saves {money(save)} vs. buying the site and {t["care_months"]} months of Care separately.</p>'
+            if save > 0 else "")
+    btn = buy_btn(t["id"], t["name"], "btn-primary" if t["featured"] else "btn-outline", "Buy now",
+                  paid_label=f"Pay {money2(dep)} to start",
+                  fallback_href=fallback_href(t) if fallback_href else None, fallback_label="Make it live")
     return (f'<article class="{cls}">{badge}<h3>{e(t["name"])}</h3>'
             f'<p class="price"><b>{money(t["price"])}</b><span>one-time</span></p>'
-            f'<p class="tier-blurb">{e(t["blurb"])}</p><ul class="checks">{items}</ul>'
-            f'{buy_btn(t["id"], t["name"], "btn-primary" if t["featured"] else "btn-outline")}</article>')
+            f'<p class="tier-deposit">Pay {money2(dep)} today, {money2(bal)} at launch.</p>{save}'
+            f'<p class="tier-blurb">{e(t["blurb"])}</p><ul class="checks">{items}</ul>{btn}</article>')
 
-def pricing_sections(slug=None, note=""):
+BONUSES = ["Google Business Profile Tune-Up Checklist",
+           "Review Request Kit: ready-to-send texts and emails to ask your customers for reviews",
+           "Photo shot list for your phone", "Launch-day call test video", "Help connecting your domain"]
+def bonuses_html(r):
+    li = "".join(f'<li>{ic("check")}<span>'
+                 + (f'<a class="text-link inline" href="{r}guides/google-business-profile-checklist/">{x}</a>' if i == 0 else x)
+                 + '</span></li>' for i, x in enumerate(BONUSES))
+    return f'<div class="bonuses"><h3>Free with every package</h3><ul class="checks">{li}</ul></div>'
+
+def pricing_section(r="", slug=None, note=""):
     tiers = "".join(tier_html(t) for t in tiers_for(slug))
-    li = lambda xs: "".join(f'<li>{ic("check")}<span>{x}</span></li>' for x in xs)
     return f"""<section class="section" id="pricing">
   <!-- Prices come from CONFIG in build.py. Do not edit here; run build.py. -->
   <div class="wrap">
-    <div class="head"><p class="kicker">Pricing</p><h2>Simple, one-time pricing</h2>
-    <p class="sub">Pay once for the site. Care is optional. Not sure yet? <a class="text-link inline" href="#mockup">Get a free mockup first.</a></p></div>
-    <div class="tiers">{tiers}</div>{note}
+    <div class="head"><p class="kicker">Pricing</p><h2>The 5-Day Phone-First Site</h2>
+    <p class="sub">Pay half to start, the rest at launch. Every package comes with the <a class="text-link inline" href="#guarantee">{GUAR}</a>. Not sure yet? Get a <a class="text-link inline" href="#mockup">free mockup first</a>.</p></div>
+    <div class="tiers">{tiers}</div>
+    <p class="tier-note">Not ready to pay? <a class="text-link inline" href="#mockup">Get a free mockup first.</a> No card needed.</p>{note}
+    {bonuses_html(r)}
   </div>
 </section>
+"""
 
-<section class="section alt" id="care">
+def care_section():
+    li = lambda xs: "".join(f'<li>{ic("check")}<span>{x}</span></li>' for x in xs)
+    bundle = TIER["emergency-care"]
+    return f"""<section class="section alt" id="care">
   <div class="wrap">
-    <div class="head"><p class="kicker">Care plans</p><h2>We look after it, you stay on the job</h2>
-    <p class="sub">Optional. We host it, test it and make small edits for you.</p></div>
+    <div class="head"><p class="kicker">After launch</p><h2>Optional Care: I look after it, you stay on the job</h2>
+    <p class="sub">Only if you want it. Already included for {bundle["care_months"]} months in the {money(bundle["price"])} package.</p></div>
     <div class="tiers care">
       <article class="tier"><h3>Monthly Care</h3><p class="price"><b>{money(care_m)}</b><span>/mo</span></p><p class="tier-blurb">Billed monthly</p>
         <ul class="checks">{li(["Hosting, SSL and form", "2 small edits a month", "Monthly test of the call button and form"])}</ul>{buy_btn('care-monthly', 'Monthly Care', 'btn-outline', 'Choose plan')}</article>
       <article class="tier"><h3>Quarterly Checkup</h3><p class="price"><b>{money(care_q)}</b><span>/quarter</span></p><p class="tier-blurb">About {money(q_per_mo)}/mo</p>
         <ul class="checks">{li(["Hosting", "Quarterly speed, link, call and form test", "New reviews and photos swapped in", "Seasonal promo line", "Up to 4 small edits a quarter"])}</ul>{buy_btn('care-quarterly', 'Quarterly Checkup', 'btn-outline', 'Choose plan')}</article>
-      <article class="tier"><h3>Annual Refresh</h3><p class="price"><b>{money(care_y)}</b><span>/yr</span></p><p class="tier-blurb">Prepaid. Saves {money(y_save)} (about {y_pct}%) vs. monthly</p>
+      <article class="tier"><h3>Annual Refresh</h3><p class="price"><b>{money(care_y)}</b><span>/yr</span></p><p class="tier-blurb">Prepaid. Saves {money(y_save)} (about {y_pct}%) vs. monthly. Doesn't auto-renew.</p>
         <ul class="checks">{li(["Everything in Monthly Care", "One yearly refresh: new hero photo, updated reviews, new offers", "Speed test re-run"])}</ul>{buy_btn('care-yearly', 'Annual Refresh', 'btn-outline', 'Choose plan')}</article>
     </div>
-    <p class="small muted center fine">A small edit takes 15 minutes or less (text, hours, a price, a photo swap). Unused edits don't roll over. Cancel with 30 days' notice and we hand over your files.</p>
+    <p class="small muted center fine">A small edit takes 15 minutes or less. Unused edits don't roll over. Monthly and quarterly plans renew until you cancel; cancel any time with 30 days' notice and you keep your files. Annual doesn't auto-renew.</p>
   </div>
 </section>
 """
 
-STEPS = [("Get a free mockup", "Tell us your business, trade and city. We'll show you your homepage before you pay."),
-         ("Pick a package", "Buy the package that fits. Send your logo, phone, cities, services, photos and reviews."),
-         ("Review your preview", "Request changes in your included revision rounds."),
-         ("Go live", "Your site goes live on your domain 5 days after your assets arrive.")]
+def guarantee_block(r, compact=False):
+    li = "".join(f'<li>{ic("check")}<span>{x}</span></li>' for x in [
+        "If I'm late, your first month of Care is free.",
+        "Your domain, your files, your site. Leave any time and take everything with you.",
+        "Care is optional and nothing renews behind your back."])
+    if compact:
+        return (f'<aside class="guarantee-box">{ic("shield", "i g-ico")}<div><b>The {GUAR}</b>'
+                f'<p>{GUAR_TEXT} If I\'m late, your first month of Care is free.</p>'
+                f'<a class="text-link inline" href="{r}refunds/">Read the full terms</a></div></aside>')
+    return f"""<section class="section guarantee" id="guarantee">
+  <div class="wrap">
+    <div class="g-card">
+      <span class="g-seal" aria-hidden="true">{ic("shield", "i")}</span>
+      <div>
+        <h2>The {GUAR}</h2>
+        <p class="lead-s">{GUAR_TEXT} No forms, no fight.</p>
+        <ul class="checks">{li}</ul>
+        <a class="text-link" href="{r}refunds/">Read the full terms {ic("arrow")}</a>
+      </div>
+    </div>
+  </div>
+</section>
+"""
+
+def founder_section(r):
+    photo = (f'<img class="founder-photo" src="{r}{C["founder_photo"]}" width="160" height="160" loading="lazy" alt="Joshua Gold">'
+             if C["founder_photo"] else "")
+    video = (f'<p><a class="text-link" href="{e(C["founder_video_url"])}" target="_blank" rel="noopener">Watch a 60-second hello<span class="sr-only"> (opens in a new tab)</span> {ic("arrow")}</a></p>'
+             if C["founder_video_url"] else "")
+    return f"""<section class="section founder" id="founder">
+  <div class="wrap narrow">
+    <div class="founder-card{' has-photo' if photo else ''}">{photo}
+      <div><p class="kicker">About me</p><h2>Who builds your site</h2>
+      <p>I'm Joshua Gold. I build every WebsitePlz site myself, by hand, for owner-operators in HVAC, plumbing, electrical, pressure washing and cleaning. You deal with me from mockup to launch, and you can email me directly at <a href="mailto:{C['contact_email']}">{e(C['contact_email'])}</a>.</p>{video}</div>
+    </div>
+  </div>
+</section>
+"""
+
+STEPS = [("Get a free mockup", "Tell me your business, trade and city. You'll get your homepage mockup within 1 business day."),
+         ("Pay 50% to start", "Like it? Pay half to start and send your logo, phone, cities, services, photos and reviews."),
+         ("Review your preview", "See the full site before it goes live. Ask for changes in your revision rounds."),
+         ("Go live and test", "Live on your domain 5 days after your assets arrive. I test the call button and form with you on launch day.")]
 def how_section():
     steps = "".join(f'<li><span class="num" aria-hidden="true">{n}</span><b>{t}</b><span>{d}</span></li>' for n, (t, d) in enumerate(STEPS, 1))
     return f"""<section class="section alt" id="how">
@@ -332,34 +441,40 @@ def forms_section(r, trade_opt="", slug=None):
     return f"""<section class="contact" id="get-started">
   <div class="wrap">
     <div class="head light"><p class="kicker light">Get started</p><h2>See your site before you pay</h2>
-    <p class="lead">Ask for a free mockup of your homepage, buy a package, or just ask us a question. We reply by email.</p></div>
+    <p class="lead">Ask for a free mockup of your homepage, buy a package, or just ask me a question. I reply by email.</p></div>
     <div class="form-grid">
-      <form class="intake js-form" id="mockup" action="{C['form_endpoint']}" method="post" novalidate aria-labelledby="mockup-h">
+      <form class="intake js-form" id="mockup" action="{C['form_endpoint']}" method="post" novalidate aria-labelledby="mockup-h" data-thanks="{r}thanks/mockup/">
         <input type="hidden" name="type" value="mockup">
-        <h3 id="mockup-h">{ic("image")} Get a free mockup</h3>
-        <p class="form-sub">No cost, no obligation. We'll mock up your homepage with your name and trade.</p>
+        <h3 id="mockup-h">{ic("image")} Get your free mockup</h3>
+        <p class="form-sub">Your homepage, within 1 business day (Mon&ndash;Fri). No payment, no card.</p>
         <div class="f2">
-          <label>Your name {req}<input name="name" autocomplete="name" required maxlength="100"></label>
           <label>Business name {req}<input name="business" autocomplete="organization" required maxlength="120"></label>
-        </div>
-        <div class="f2">
           <label>Trade {req}<select name="trade" required><option value="">Choose your trade</option>{opts(TRADE_OPTS, trade_opt)}</select></label>
-          <label>City {req}<input name="city" autocomplete="address-level2" required maxlength="100"></label>
         </div>
         <div class="f2">
+          <label>City {req}<input name="city" autocomplete="address-level2" required maxlength="100"></label>
           <label>Email {req}<input type="email" name="email" autocomplete="email" required maxlength="160"></label>
-          <label>Phone {opt}<input type="tel" name="phone" autocomplete="tel" maxlength="40"></label>
         </div>
-        <label>Current website or Google listing {opt}<input name="listing" inputmode="url" maxlength="300" placeholder="Link to your site, Google or Facebook page"></label>
+        <details class="more"><summary>Add details (optional)<span class="plus" aria-hidden="true"></span></summary>
+          <div class="more-body">
+            <div class="f2">
+              <label>Your name<input name="name" autocomplete="name" maxlength="100"></label>
+              <label>Phone<input type="tel" name="phone" autocomplete="tel" maxlength="40"></label>
+            </div>
+            <label>Current website, Google or Facebook link<input name="listing" inputmode="url" maxlength="300"></label>
+            <label>Your top 3 services<input name="services" maxlength="200" placeholder="e.g. AC repair, furnace install, maintenance plans"></label>
+            <label>Who referred you?<input name="referred_by" maxlength="120"></label>
+          </div>
+        </details>
         {hp}
-        <button class="btn btn-primary btn-lg btn-block" type="submit" data-label="Send for my free mockup">Send for my free mockup</button>
-        <p class="form-fine">{req} Required. We only use your details to reply to you.</p>
+        <button class="btn btn-primary btn-lg btn-block" type="submit" data-label="Send me my mockup">Send me my mockup</button>
+        <p class="form-fine">You'll get a private link that stays up for {C['mockup_days']} days. {req} Required. I only use your details to reply to you.</p>
         {status}
       </form>
       <form class="intake js-form" id="contact" action="{C['form_endpoint']}" method="post" novalidate aria-labelledby="contact-h">
         <input type="hidden" name="type" value="contact">
         <h3 id="contact-h">{ic("mail")} Buy a package or ask a question</h3>
-        <p class="form-sub">Pick a package and we'll send next steps, or just ask.</p>
+        <p class="form-sub">Pick a package and I'll send next steps, or just ask.</p>
         <div class="f2">
           <label>Your name {req}<input name="name" autocomplete="name" required maxlength="100"></label>
           <label>Email {req}<input type="email" name="email" autocomplete="email" required maxlength="160"></label>
@@ -368,11 +483,7 @@ def forms_section(r, trade_opt="", slug=None):
           <label>Business name {opt}<input name="business" autocomplete="organization" maxlength="120"></label>
           <label>Phone {opt}<input type="tel" name="phone" autocomplete="tel" maxlength="40"></label>
         </div>
-        <div class="f2">
-          <label>Trade {opt}<select name="trade"><option value="">Choose your trade</option>{opts(TRADE_OPTS, trade_opt)}</select></label>
-          <label>Package<select name="package" class="f-package">{pk}</select></label>
-        </div>
-        <label>Current website {opt}<input type="url" name="website" inputmode="url" placeholder="https://" maxlength="200"></label>
+        <label>Package<select name="package" class="f-package">{pk}</select></label>
         <label>Message <span class="opt">(required if you didn't pick a package)</span><textarea name="message" rows="4" maxlength="3000" placeholder="Your question, the cities you serve, anything else."></textarea></label>
         {hp}
         <button class="btn btn-outline btn-lg btn-block" type="submit" data-label="Send message">Send message</button>
@@ -386,22 +497,23 @@ def forms_section(r, trade_opt="", slug=None):
 """
 
 FORM_JS = """<script>
-(function(){function lab(el){var l=el.closest('label');return l&&l.firstChild&&l.firstChild.nodeType===3?l.firstChild.textContent.replace(/\\s*\\(.*$/,'').trim():el.name;}
-function fallback(f){var L=[];Array.prototype.forEach.call(f.querySelectorAll('input,select,textarea'),function(el){if(el.type==='hidden'||el.name==='company_fax'||!el.value.trim())return;var n=lab(el);var v=el.tagName==='SELECT'?el.options[el.selectedIndex].text:el.value.trim();L.push(n+': '+v);});var sub=f.type.value==='mockup'?'Free mockup request':'Website question';var href='mailto:__EMAIL__?subject='+encodeURIComponent(sub)+'&body='+encodeURIComponent(L.join('\\n'));return 'Our form is not taking messages right now, so nothing was sent. <a href="'+href.replace(/"/g,'%22')+'">Email your details instead</a> (we prefill it for you) or write to <a href="__MAILTO__">__EMAIL__</a>.';}
+(function(){var LIVE=__LIVE__;function lab(el){var l=el.closest('label');return l&&l.firstChild&&l.firstChild.nodeType===3?l.firstChild.textContent.replace(/\\s*\\(.*$/,'').trim():el.name;}
+function fallback(f){var L=[];Array.prototype.forEach.call(f.querySelectorAll('input,select,textarea'),function(el){if(el.type==='hidden'||el.name==='company_fax'||!el.value.trim())return;var n=lab(el);var v=el.tagName==='SELECT'?el.options[el.selectedIndex].text:el.value.trim();L.push(n+': '+v);});var sub=f.type.value==='mockup'?'Free mockup request':'Website question';var href='mailto:__EMAIL__?subject='+encodeURIComponent(sub)+'&body='+encodeURIComponent(L.join('\\n'));return 'My form isn\\u2019t taking messages right now, so nothing was sent. <a href="'+href.replace(/"/g,'%22')+'">Email your details instead</a> (it\\u2019s prefilled for you) or write to <a href="__MAILTO__">__EMAIL__</a>.';}
 document.addEventListener('click',function(ev){var a=ev.target.closest&&ev.target.closest('[data-package]');if(!a)return;var s=document.querySelector('#contact .f-package');if(s)s.value=a.getAttribute('data-package');});
 Array.prototype.forEach.call(document.querySelectorAll('.js-form'),function(f){var st=f.querySelector('.form-status'),btn=f.querySelector('button[type=submit]');f.t.value=Date.now();
 function show(m,ok){st.className='form-status '+(ok?'ok':'err');st.innerHTML=m;st.focus();}
 f.addEventListener('submit',function(ev){ev.preventDefault();var bad=null;
  Array.prototype.forEach.call(f.querySelectorAll('input,select,textarea'),function(el){el.removeAttribute('aria-invalid');if(el.type!=='hidden'&&!el.checkValidity()){el.setAttribute('aria-invalid','true');bad=bad||el;}});
  if(f.message&&f.package&&f.package.value==='not-sure'&&!f.message.value.trim()){f.message.setAttribute('aria-invalid','true');bad=bad||f.message;}
- if(bad){var names=[];Array.prototype.forEach.call(f.querySelectorAll('[aria-invalid=true]'),function(el){var n=lab(el);if(names.indexOf(n)<0)names.push(n);});show('Please check: '+names.join(', ')+'.',false);bad.focus();return;}
+ if(bad){var names=[];Array.prototype.forEach.call(f.querySelectorAll('[aria-invalid=true]'),function(el){var n=lab(el);if(names.indexOf(n)<0)names.push(n);});show('Please check: '+names.join(', ')+'.',false);var d=bad.closest('details');if(d)d.open=true;bad.focus();return;}
+ if(!LIVE){show(fallback(f),false);return;}
  btn.disabled=true;btn.textContent='Sending...';
  fetch(f.action,{method:'POST',headers:{'Accept':'application/json'},body:new FormData(f)}).then(function(r){return r.json().catch(function(){return {ok:false};}).then(function(d){return [r,d];});})
- .then(function(x){var r=x[0],d=x[1];if(r.ok&&d.ok){f.reset();f.t.value=Date.now();show(f.type.value==='mockup'?'Thanks! We\\u2019ve got your details and will email you about your free mockup.':'Thanks! Your message is in. We\\u2019ll reply by email soon.',true);}else{show(r.status<500&&d.error?d.error:fallback(f),false);}})
+ .then(function(x){var r=x[0],d=x[1];if(r.ok&&d.ok){var go=f.getAttribute('data-thanks');if(go){location.href=go;return;}f.reset();f.t.value=Date.now();show('Thanks! Your message is in. I\\u2019ll reply by email within 1 business day.',true);}else{show(r.status<500&&d.error?d.error:fallback(f),false);}})
  .catch(function(){show(fallback(f),false);}).then(function(){btn.disabled=false;btn.textContent=btn.getAttribute('data-label');});
 });});})();
 </script>
-""".replace("__MAILTO__", mailto).replace("__EMAIL__", C["contact_email"])
+""".replace("__MAILTO__", mailto).replace("__EMAIL__", C["contact_email"]).replace("__LIVE__", "true" if C["form_delivery_live"] else "false")
 
 INCLUDED = [
     ("phone", "Click-to-call everywhere", "A call button in the header and a bar that stays on screen while customers scroll."),
@@ -431,7 +543,7 @@ def sample_card(r, slug, name, niche, trade):
             f'<div class="sample-body"><span class="tag">{ic(icon)}{niche}</span><h3>{name}</h3>'
             f'<p class="muted small">Fictional demo company</p>'
             f'<div class="sample-links"><a class="text-link" href="{url}" target="_blank" rel="noopener">View live demo<span class="sr-only"> of {name} (opens in a new tab)</span> {ic("arrow")}</a>'
-            f'<a class="text-link quiet" href="{r}{trade}/">{TBY[trade]["label"]} websites<span class="sr-only">: our page for {TBY[trade]["noun"]} businesses</span></a></div></div></article>')
+            f'<a class="text-link quiet" href="{r}{trade}/">{TBY[trade]["label"]} websites<span class="sr-only">: my page for {TBY[trade]["noun"]} businesses</span></a></div></div></article>')
 
 def blog_cards(r, posts):
     return "".join(f'<article class="post-card"><span class="tag">{ic(TBY[p["trade"]]["icon"])}{TBY[p["trade"]]["label"]}</span>'
@@ -450,7 +562,7 @@ def vhash(rel):
 ASSET_RE = re.compile(r'((?:src|href|content|srcset)=")([^"]+)(")')
 def _bust_one(url, base):
     u = url.split("?v=")[0]
-    if not re.search(r"\.(css|webp|png|jpg|svg|ico|woff2|webmanifest)$", u) or u.startswith(("http://", "https://")) and not u.startswith(SITE):
+    if not re.search(r"\.(css|js|webp|png|jpg|jpeg|svg|ico|woff2|webmanifest)$", u) or u.startswith(("http://", "https://")) and not u.startswith(SITE):
         return url
     rel = u[len(SITE):] if u.startswith(SITE) else (pathlib.PurePosixPath(base) / u).as_posix()
     rel = rel.lstrip("/")
@@ -513,6 +625,13 @@ def blog_teaser(r, posts, h="From the blog", sub="Practical guides to getting mo
 </section>
 """
 
+def hero_chips(r, here):
+    g = f'<li><a class="chip-link" href="#guarantee">{ic("shield")}{GUAR}</a></li>'
+    base = f'<li>{ic("check")}From {money(lowest)}</li><li>{ic("check")}Live in 5 days</li><li>{ic("check")}You own your domain</li>'
+    return f'<ul class="trust">{base}{g}</ul>'
+
+HERO_RISK = '<p class="hero-risk">See your homepage free in 1 business day. Pay nothing unless you love it.</p>'
+
 def build_home():
     r = ""
     title = "WebsitePlz | Websites That Make the Phone Ring"
@@ -523,12 +642,15 @@ def build_home():
         {"@type": "WebSite", "@id": SITE + "#website", "url": SITE, "name": "WebsitePlz", "publisher": {"@id": SITE + "#org"}},
         {"@type": "ProfessionalService", "@id": SITE + "#service", "name": "WebsitePlz", "url": SITE, "image": SITE + "img/og.png",
          "logo": SITE + "img/icon-512.png", "email": C["contact_email"], "parentOrganization": {"@id": SITE + "#org"},
+         "founder": {"@type": "Person", "name": "Joshua Gold"},
          "description": "Phone-first one-page websites for local service businesses.", "priceRange": f"{money(lowest)}+",
          "makesOffer": [{"@type": "Offer", "name": t["name"], "price": t["price"], "priceCurrency": "USD"} for t in C["tiers"]]},
         {"@type": "FAQPage", "mainEntity": [{"@type": "Question", "name": q, "acceptedAnswer": {"@type": "Answer", "text": strip(a)}} for q, a in FAQ]},
     ]}
     samples = "".join(sample_card(r, *s) for s in SAMPLES)
     trades_strip = "".join(f'<li><a href="{t["slug"]}/">{ic(t["icon"])}{t["label"]}</a></li>' for t in TRADES)
+    note = ('<p class="small muted center fine">Cleaning or pressure washing? The same packages are called Booking-ready on the '
+            '<a class="text-link inline" href="cleaning/#pricing">cleaning</a> and <a class="text-link inline" href="pressure-washing/#pricing">pressure washing</a> pages.</p>')
     page = head(r, "", title, desc, "og.png", jsonld) + header(r, "") + f"""
 <main id="main">
 <section class="hero" id="top">
@@ -538,29 +660,49 @@ def build_home():
       <h1>Websites that make the <em>phone ring.</em></h1>
       <p class="lead">One-page, phone-first websites for HVAC, plumbing, electrical, pressure washing and cleaning businesses. A call button that stays on screen, your services and cities, and a quote form. Live on your own domain 5 days after you send your logo and photos.</p>
       {three_paths(r)}
-      <ul class="trust"><li>{ic("check")}From {money(lowest)}</li><li>{ic("check")}Live in 5 days</li><li>{ic("check")}You own your domain</li><li>{ic("check")}No WordPress or plugins</li></ul>
+      {HERO_RISK}
+      {hero_chips(r, "")}
     </div>
     {device(r, "ridgeline", "Ridge Line Heating &amp; Air", True, "tidypine-cleaning", "Tidy Pine Home Cleaning")}
   </div>
-  <div class="wrap"><ul class="trades" aria-label="Trades we build for">{trades_strip}</ul></div>
+  <div class="wrap"><ul class="trades" aria-label="Trades I build for">{trades_strip}</ul></div>
 </section>
 {trade_chooser(r)}
 <section class="section alt" id="samples">
   <div class="wrap">
-    <div class="head"><p class="kicker">Our work</p><h2>See what we build</h2>
-    <p class="sub">Four live demo sites, built the way we build yours. The companies are fictional, so open one on your phone and tap around.</p></div>
+    <div class="head"><p class="kicker">Our work</p><h2>See what I build</h2>
+    <p class="sub">Four live demo sites, built the way I'd build yours. The companies are fictional, so open one on your phone and tap around.</p></div>
     <div class="grid2">{samples}</div>
     <p class="center more"><a class="text-link" href="{C['samples_base']}" target="_blank" rel="noopener">All samples<span class="sr-only"> (opens in a new tab)</span> {ic("arrow")}</a></p>
   </div>
 </section>
-{included_section(INCLUDED)}{how_section()}{pricing_sections(note='<p class="small muted center fine">Cleaning or pressure washing? The same packages are called Booking-ready on the <a class="text-link inline" href="cleaning/#pricing">cleaning</a> and <a class="text-link inline" href="pressure-washing/#pricing">pressure washing</a> pages.</p>')}{faq_section(FAQ)}{blog_teaser(r, POSTS[:3])}{forms_section(r)}</main>
+{included_section(INCLUDED)}{how_section()}{guarantee_block(r)}{pricing_section(r, note=note)}{founder_section(r)}{care_section()}{faq_section(FAQ)}{blog_teaser(r, POSTS[:3])}{forms_section(r)}</main>
 """ + footer(r, "") + FORM_JS + "</body>\n</html>\n"
     write("index.html", page)
+
+def calc_section(r, t):
+    tier = tiers_for(t["slug"])[1]
+    short = tier["name"].replace(" Site", "")
+    return f"""<section class="section calc" id="calc" data-price="{tier['price']}" data-tier="{e(short)}" data-price-label="{money(tier['price'])}">
+  <div class="wrap narrow">
+    <div class="head"><p class="kicker">Your numbers</p><h2>What are missed calls costing you?</h2></div>
+    <div class="calc-card">
+      <div class="calc-grid">
+        <label for="calc-calls">Calls you miss in a typical week<input id="calc-calls" type="number" inputmode="numeric" min="0" step="1"></label>
+        <label for="calc-book">Out of 10 callers, how many usually book?<input id="calc-book" type="number" inputmode="numeric" min="0" max="10" step="1"></label>
+        <label for="calc-job">Your average job, in dollars<input id="calc-job" type="number" inputmode="numeric" min="0" step="1"></label>
+      </div>
+      <p class="calc-out" id="calc-out" aria-live="polite">Fill in all three to see the math.</p>
+      <p class="small muted calc-fine">Your numbers, your math. Nothing is saved or sent.</p>
+    </div>
+  </div>
+</section>
+"""
 
 def build_trade(t):
     r = "../"
     path = f'{t["slug"]}/'
-    faq = [(q, a.replace("{root}", r)) for q, a in t["faq"]] + FAQ_TRADE_SHARED
+    faq = [(q, a.replace("{root}", r)) for q, a in t["faq"]] + [(q, booking(a, t["slug"])) for q, a in FAQ_TRADE_SHARED]
     post = next(p for p in POSTS if p["slug"] == t["blog"])
     jsonld = {"@context": "https://schema.org", "@graph": [
         ORG,
@@ -587,8 +729,9 @@ def build_trade(t):
       <p class="eyebrow"><span class="dot" aria-hidden="true"></span>{t["eyebrow"]}</p>
       <h1>{t["h1"]}</h1>
       <p class="lead">{e(t["lead"])}</p>
-      {three_paths(r, "trade")}
-      <ul class="trust"><li>{ic("check")}From {money(lowest)}</li><li>{ic("check")}Live in 5 days</li><li>{ic("check")}You own your domain</li></ul>
+      {three_paths(r, "trade", label=f'Get my free {t["noun"]} mockup')}
+      {HERO_RISK}
+      {hero_chips(r, "trade")}
     </div>
     {device(r, t["demo"], t["demo_name"], True, note=t.get("hero_note", "Demo site for a fictional company."))}
   </div>
@@ -600,7 +743,7 @@ def build_trade(t):
     <div class="grid3">{pains}</div>
   </div>
 </section>
-
+{calc_section(r, t)}
 <section class="section alt" id="samples">
   <div class="wrap demo-show">
     <div class="demo-media">{browser(r, t["demo"], t["demo_name"], label="Live demo", sizes="(min-width:1024px) 600px, 92vw")}{phone(r, t["demo"], t["demo_name"])}</div>
@@ -612,7 +755,7 @@ def build_trade(t):
     </div>
   </div>
 </section>
-{included_section(t["includes"], h=f'What your {t["noun"]} site includes', sub=t["included_sub"])}{how_section()}{pricing_sections(t["slug"])}{faq_section(faq, h=f'{t["label"]} website questions')}
+{included_section(t["includes"], h=f'What your {t["noun"]} site includes', sub=t["included_sub"])}{how_section()}{guarantee_block(r)}{pricing_section(r, t["slug"])}{faq_section(faq, h=f'{t["label"]} website questions')}
 <section class="section alt" id="blog">
   <div class="wrap">
     <div class="head"><p class="kicker">Guide</p><h2>Read before you build</h2></div>
@@ -621,10 +764,10 @@ def build_trade(t):
 </section>
 {forms_section(r, t["option"], t["slug"])}
 <section class="section other-trades" aria-labelledby="other-h">
-  <div class="wrap center"><h2 id="other-h" class="h-sm">Other trades we build for</h2><ul class="trades dark">{others}</ul></div>
+  <div class="wrap center"><h2 id="other-h" class="h-sm">Other trades I build for</h2><ul class="trades dark">{others}</ul></div>
 </section>
 </main>
-""" + footer(r, "trade") + FORM_JS + "</body>\n</html>\n"
+""" + footer(r, "trade") + FORM_JS + f'<script src="{r}js/calc.js" defer></script>\n' + "</body>\n</html>\n"
     write(path + "index.html", page)
 
 def build_blog_index():
@@ -671,12 +814,18 @@ def build_post(p):
     t = TBY[p["trade"]]
     body = (ROOT / "content" / "blog" / f'{p["slug"]}.html').read_text().replace("{root}", r)
     words = len(re.sub(r"<[^>]+>", " ", body).split())
+    # B-2: mid-article mockup box before the 3rd <h2>
+    h2s = [m.start() for m in re.finditer(r"<h2[\s>]", body)]
+    if len(h2s) >= 3:
+        mid = (f'<aside class="post-cta mid"><p><b>Want to see this on your own business?</b> I\'ll make a free mockup of your {t["noun"]} homepage within 1 business day. No card.</p>'
+               f'<a class="btn btn-primary" href="{r}{t["slug"]}/#mockup">Get my free mockup {ic("arrow")}</a></aside>\n')
+        body = body[:h2s[2]] + mid + body[h2s[2]:]
     mins = max(1, round(words / 230))
     # external links open normally; mark them
     jsonld = {"@context": "https://schema.org", "@graph": [ORG,
         {"@type": "BlogPosting", "headline": p["title"], "description": p["desc"], "url": SITE + path,
          "mainEntityOfPage": SITE + path, "datePublished": p["date"], "dateModified": p["date"], "wordCount": words,
-         "image": f'{SITE}img/og-{p["trade"]}.png', "author": {"@id": SITE + "#org"}, "publisher": {"@id": SITE + "#org"}},
+         "image": f'{SITE}img/og-{p["trade"]}.png', "author": {"@type": "Person", "name": "Joshua Gold", "url": SITE}, "publisher": {"@id": SITE + "#org"}},
         {"@type": "BreadcrumbList", "itemListElement": [
             {"@type": "ListItem", "position": 1, "name": "Home", "item": SITE},
             {"@type": "ListItem", "position": 2, "name": "Blog", "item": SITE + "blog/"},
@@ -690,12 +839,12 @@ def build_post(p):
     <div class="wrap narrow">
       <nav class="crumbs" aria-label="Breadcrumb"><a href="{r}">Home</a><span aria-hidden="true">/</span><a href="{r}blog/">Blog</a><span aria-hidden="true">/</span><span aria-current="page">{t["label"]}</span></nav>
       <h1>{e(p["h1"][:1].upper() + p["h1"][1:])}</h1>
-      <p class="post-meta">By WebsitePlz &middot; <time datetime="{p["date"]}">{nice_date}</time> &middot; {mins} min read</p>
+      <p class="post-meta">By Joshua Gold &middot; <time datetime="{p["date"]}">{nice_date}</time> &middot; {mins} min read</p>
     </div>
   </header>
   <div class="wrap narrow prose">
 {body}
-    <aside class="post-cta"><b>See it on a real page</b><p>Our {t["noun"]} layout puts all of this on one fast, phone-first page.</p>
+    <aside class="post-cta"><b>See it on a real page</b><p>My {t["noun"]} layout puts all of this on one fast, phone-first page. <a class="text-link inline" href="{r}guides/google-business-profile-checklist/">Free: GBP Tune-Up Checklist</a></p>
       <div class="cta-row"><a class="btn btn-primary" href="{r}{t["slug"]}/">{t["label"]} websites {ic("arrow")}</a><a class="btn btn-outline" href="{r}#mockup">Get a free mockup</a></div></aside>
   </div>
 </article>
@@ -706,14 +855,273 @@ def build_post(p):
 """ + footer(r, "blog") + "</body>\n</html>\n"
     write(path + "index.html", page)
 
+# ---------------------------------------------------------------- simple pages (legal, thanks, guide, mockups)
+NOINDEX_META = '<meta name="robots" content="noindex, nofollow">\n<meta name="referrer" content="no-referrer">\n'
+NOINDEX = set()        # paths kept out of sitemap.xml
+
+def simple_page(path, title, desc, body, noindex=False, bar=True, scripts="", jsonld=None, crumb=None):
+    r = "../" * path.count("/")
+    ld = jsonld or {"@context": "https://schema.org", "@graph": [ORG] + ([{"@type": "BreadcrumbList", "itemListElement": [
+        {"@type": "ListItem", "position": 1, "name": "Home", "item": SITE},
+        {"@type": "ListItem", "position": 2, "name": crumb, "item": SITE + path}]}] if crumb and not noindex else [])}
+    crumbs = (f'<nav class="crumbs" aria-label="Breadcrumb"><a href="{r}">Home</a><span aria-hidden="true">/</span>'
+              f'<span aria-current="page">{crumb}</span></nav>') if crumb else ""
+    page = head(r, path, title, desc, "og.png", ld, NOINDEX_META if noindex else "") + header(r, "page") + \
+        f'\n<main id="main">\n{body.replace("{root}", r).replace("{crumbs}", crumbs)}</main>\n' + footer(r, "page", bar=bar) + scripts.replace("{root}", r) + "</body>\n</html>\n"
+    if noindex: NOINDEX.add(path)
+    write(path + "index.html", page)
+
+def mail(subject=None):
+    return f'mailto:{C["contact_email"]}' + (f'?subject={urllib.parse.quote(subject)}' if subject else "")
+def email_link(): return f'<a href="mailto:{C["contact_email"]}">{e(C["contact_email"])}</a>'
+
+def build_thanks():
+    simple_page("thanks/mockup/", "Got it. Your mockup is on the way | WebsitePlz", "Your free mockup request is in.", f"""<section class="hero page-hero">
+  <div class="wrap narrow center">
+    <span class="thanks-ico" aria-hidden="true">{ic("check", "i")}</span>
+    <h1>Got it. Your mockup is on the way.</h1>
+    <p class="lead">I'll email your private mockup link within 1 business day (Mon&ndash;Fri). It stays up for {C['mockup_days']} days so you can show your partner or crew.</p>
+  </div>
+</section>
+<section class="section">
+  <div class="wrap narrow">
+    <h2 class="h-sm">While you wait</h2>
+    <ol class="wait-list">
+      <li><a href="{{root}}#samples">Open a demo site on your phone and tap the call button</a></li>
+      <li><a href="{{root}}guides/google-business-profile-checklist/">Run the free Google Business Profile Tune-Up Checklist</a></li>
+      <li><a href="{{root}}#guarantee">Read the {GUAR}</a></li>
+    </ol>
+    <p class="muted">Questions? Email me at {email_link()}.</p>
+  </div>
+</section>
+""", noindex=True, bar=False)
+    checklist = ["Logo", "Phone (and after-hours or 24/7 line)", "Cities served", "Top services", "2 or 4 photos (per your package)",
+                 "Reviews you want shown (real ones)", "License and insured lines", "Domain registrar login, or a time to connect it together"]
+    timeline = ["Assets in", "Preview within 5 days", "You approve or ask for changes", "Balance, then live", "Launch-day call test"]
+    simple_page("thanks/order/", "Payment received | WebsitePlz", "Your order is in. Here's what I need from you.", f"""<section class="hero page-hero">
+  <div class="wrap narrow center">
+    <span class="thanks-ico" aria-hidden="true">{ic("check", "i")}</span>
+    <h1>Payment received. Let's build your site.</h1>
+    <p class="lead">Reply to your order email with the items below, or use the button. Your site goes live 5 days after the last item arrives.</p>
+  </div>
+</section>
+<section class="section">
+  <div class="wrap narrow">
+    <h2 class="h-sm">What I need from you</h2>
+    <ul class="checks">{"".join(f'<li>{ic("check")}<span>{x}</span></li>' for x in checklist)}</ul>
+    <p><a class="btn btn-primary" href="{e(mail("Assets for my WebsitePlz order"))}">Email my assets {ic("arrow")}</a></p>
+    <h2 class="h-sm">What happens next</h2>
+    <ol class="wait-list plain">{"".join(f'<li>{x}</li>' for x in timeline)}</ol>
+    <p class="muted">You'll see the full preview before launch, and the <a href="{{root}}refunds/">{GUAR}</a> still applies. Questions? {email_link()}</p>
+  </div>
+</section>
+""", noindex=True, bar=False)
+
+def legal_body(h1, inner):
+    return f"""<section class="hero page-hero">
+  <div class="wrap narrow">{{crumbs}}
+    <h1>{h1}</h1>
+    <p class="post-meta">Last updated October 4, 2026</p>
+  </div>
+</section>
+<section class="section legal">
+  <div class="wrap narrow prose">
+{inner}
+  </div>
+</section>
+"""
+
+def build_legal():
+    rows = "".join(
+        f'<tr><th scope="row">{e(t["name"])}<span class="alias">{e(booking(t["name"], "cleaning")) if "Emergency" in t["name"] else ""}</span></th>'
+        f'<td>{money(t["price"])}</td><td>{money2(deposit(t["price"]))}</td><td>{money2(balance(t["price"]))}</td>'
+        f'<td>{"; ".join(x.format(care_monthly=money(care_m)) for x in t["items"])}</td></tr>' for t in C["tiers"])
+    simple_page("terms/", "Terms of Service | WebsitePlz", "Plain-English terms for WebsitePlz websites: packages, the 50% deposit, timeline, revisions, ownership and what's not included.", legal_body("Terms of service", f"""
+<p class="intro">Plain English. If anything here is unclear, email me at {email_link()} before you pay.</p>
+<h2>Who you're working with</h2>
+<p>WebsitePlz is run by Joshua Gold. "I" and "me" below means WebsitePlz. "You" means the business buying the site.</p>
+<h2>What each package includes</h2>
+<div class="table-wrap"><table class="terms-table"><thead><tr><th scope="col">Package</th><th scope="col">Price</th><th scope="col">Due today</th><th scope="col">Due at launch</th><th scope="col">What's in it</th></tr></thead><tbody>{rows}</tbody></table></div>
+<p>On cleaning and pressure washing sites, Emergency-ready is called Booking-ready, and the license line is an insured/bonded line. Same price and contents.</p>
+<h2>Payment</h2>
+<p>Each site package is a one-time price. You pay 50% to start and the other 50% at launch, after you've approved your site. Care plans are separate and optional; see <a href="{{root}}refunds/#care">Care and cancellation</a>.</p>
+<h2>Timeline</h2>
+<p>Your site goes live within 5 calendar days of the last checklist item arriving: logo, phone, cities, services, photos, reviews, license and insured lines, and domain access. Delays caused by domain access you haven't given yet don't count toward the 5 days.</p>
+<h2>Revisions</h2>
+<p>Starter includes 1 revision round. The other packages include 2. A revision round is one list of changes to what's on the page, such as text, photos, colors or the order of sections. A new design, new pages or new features aren't revisions and are quoted separately.</p>
+<h2>Who owns what</h2>
+<p>You own your domain from day one. It's registered in your name and your account. Once you've paid in full, you own the final page files too. Leave any time and take everything with you.</p>
+<h2>Your content</h2>
+<p>Everything you send me (logo, photos, text, reviews) must be yours or used with permission. Reviews must be real reviews from real customers. I don't write or invent reviews. License and insurance details must be accurate.</p>
+<h2>What's not included</h2>
+<ul><li>Blogs or extra pages</li><li>Online stores or payments on your site</li><li>SEO campaigns or link building</li><li>Running or managing ads</li><li>Hosting after launch, unless you choose Care or the 6-month package</li></ul>
+<h2>Guarantee and refunds</h2>
+<p>See <a href="{{root}}refunds/">Refunds and the {GUAR}</a>.</p>
+<h2>Contact</h2>
+<p>{email_link()}</p>
+"""), crumb="Terms")
+    simple_page("refunds/", f"Refunds and the {GUAR} | WebsitePlz", "How the See-It-First Guarantee works, what late means, how to claim a refund, and how Care plans renew and cancel.", legal_body(f"Refunds and the {GUAR}", f"""
+<p class="intro">You see your site before it goes live. If you don't love it, tell me before launch and I'll refund everything you've paid. If I'm late, your first month of Care is free.</p>
+<h2>What "late" means</h2>
+<p>Late means your site isn't live within 5 calendar days of the last checklist item arriving. Delays caused by domain access you haven't given yet don't count. If I'm late, your first month of Care is free. On the {money(TIER["emergency-care"]["price"])} package the free month is added on, so Care runs 7 months.</p>
+<h2>How to claim a refund</h2>
+<p>Email {email_link()} any time before launch and say you'd like a refund. No forms, no fight. I issue the refund to your original card within 2 business days. Banks usually take 5 to 10 days to show it.</p>
+<h2>After launch</h2>
+<p>Once you've approved your site and it's live, the balance is due and no refund is offered. Anything you'd like changed can be fixed in your revision rounds.</p>
+<h2 id="care">Care and cancellation</h2>
+<ul>
+<li>Monthly Care ({money(care_m)}/mo) and Quarterly Checkup ({money(care_q)}/quarter) renew until you cancel.</li>
+<li>Cancel any time with 30 days' notice, by email or through the Stripe customer portal link in your billing emails.</li>
+<li>Annual Refresh ({money(care_y)}/yr) is prepaid and doesn't auto-renew. I'll remind you 30 days before it ends, and it renews only if you say yes.</li>
+<li>The {TIER["emergency-care"]["care_months"]} months of Care in the {money(TIER["emergency-care"]["price"])} package aren't billed separately. After month {TIER["emergency-care"]["care_months"]}, Care continues only if you opt in. Nothing auto-renews.</li>
+<li>When you cancel, you keep your files.</li>
+<li>A small edit takes 15 minutes or less. Unused edits don't roll over.</li>
+</ul>
+<h2>Contact</h2>
+<p>{email_link()}</p>
+"""), crumb="Refunds and Guarantee")
+    simple_page("privacy/", "Privacy | WebsitePlz", "What the WebsitePlz forms collect, how messages are delivered, the cookieless analytics this site uses, and how payments are handled.", legal_body("Privacy", f"""
+<p class="intro">Short version: I collect only what I need to reply to you and build your site, and I never sell it.</p>
+<h2>What the forms collect</h2>
+<p><strong>Free mockup form:</strong> business name, trade, city and email (required), plus optional name, phone, current website or listing, top services and who referred you.</p>
+<p><strong>Message form:</strong> name and email (required), plus optional business name, phone, package and message.</p>
+<p>I use these details only to make your mockup, reply to you and, if you buy, build your site.</p>
+<h2>How messages are delivered</h2>
+<p>Form submissions and emails to {e(C["contact_email"])} reach my inbox through Cloudflare, which hosts this site. If the form can't send, your browser offers a prefilled email instead, and nothing is sent until you press send in your own email app.</p>
+<h2>Analytics</h2>
+<p>This site uses Cloudflare Web Analytics, which counts page views without cookies and doesn't track you across other sites.</p>
+<h2>Payments</h2>
+<p>Payments are handled by Stripe. I never see or store your full card number.</p>
+<h2>What I don't do</h2>
+<p>I don't sell, rent or share your details for marketing. No ad trackers and no advertising cookies.</p>
+<h2>Deleting your details</h2>
+<p>Want your details deleted? Email me and I'll delete them, except anything I have to keep for tax records.</p>
+<h2>Contact</h2>
+<p>{email_link()}</p>
+"""), crumb="Privacy")
+
+GBP_CHECKS = [
+    ("Claim and verify your profile", "https://support.google.com/business/answer/145585"),
+    ("Use your real business name, with no extra keywords", "https://support.google.com/business/answer/3038177"),
+    ("Pick the most specific primary category", "https://support.google.com/business/answer/3038177"),
+    ("Set your service area and hours, and keep holiday hours current", "https://support.google.com/business/answer/7091"),
+    ("Use the same phone number and website as your site", "https://support.google.com/business/answer/7091"),
+    ("Add real photos of your work, team and trucks", "https://support.google.com/business/answer/7091"),
+    ("Ask every customer for a review, the same way, good or bad, with no rewards", "https://support.google.com/contributionpolicy/answer/7400114"),
+    ("Reply to reviews", "https://support.google.com/business/answer/7091"),
+    ("Post updates or offers when you have them", "https://support.google.com/business/answer/7091"),
+]
+def build_guide():
+    path = "guides/google-business-profile-checklist/"
+    items = "".join(f'<li><span>{x}</span> <a class="src" href="{u}" rel="noopener">Google\'s guidance<span class="sr-only">: {x}</span></a></li>' for x, u in GBP_CHECKS)
+    ld = {"@context": "https://schema.org", "@graph": [ORG,
+        {"@type": "Article", "headline": "Google Business Profile Tune-Up Checklist", "url": SITE + path, "datePublished": "2026-10-04",
+         "author": {"@type": "Person", "name": "Joshua Gold", "url": SITE}, "publisher": {"@id": SITE + "#org"}, "image": SITE + "img/og.png"},
+        {"@type": "BreadcrumbList", "itemListElement": [
+            {"@type": "ListItem", "position": 1, "name": "Home", "item": SITE},
+            {"@type": "ListItem", "position": 2, "name": "GBP Tune-Up Checklist", "item": SITE + path}]}]}
+    simple_page(path, "Free Google Business Profile Tune-Up Checklist | WebsitePlz",
+                "A free 9-point Google Business Profile checklist for local service businesses, with each step linked to Google's own help pages. No email needed.", f"""<section class="hero page-hero">
+  <div class="wrap narrow">{{crumbs}}
+    <h1>Google Business Profile Tune-Up Checklist (free)</h1>
+    <p class="lead">Nine checks, each linked to Google's own help page. No email needed.</p>
+    <p class="post-meta">By Joshua Gold &middot; <time datetime="2026-10-04">October 4, 2026</time></p>
+  </div>
+</section>
+<section class="section">
+  <div class="wrap narrow prose">
+    <ol class="checklist gbp">{items}</ol>
+    <p class="no-print"><button class="btn btn-outline" type="button" id="print-btn">Print this page</button></p>
+    <p class="muted small">Google changes its rules from time to time, so each step links to the current help page.</p>
+  </div>
+</section>
+{cta_band("{root}")}""", scripts='<script src="{root}js/print.js" defer></script>\n', jsonld=ld, crumb="GBP Tune-Up Checklist")
+
+# ---- private mockup pages (MP-1..MP-3) ---------------------------------------------------------
+MOCK_SRC = ROOT / "content" / "mockups"
+def mock_slug(business):
+    """Unguessable slug: kebab-case name + 6 random chars. Use when creating a new mockup JSON."""
+    import secrets, string
+    base = re.sub(r"[^a-z0-9]+", "-", business.lower()).strip("-")[:40]
+    return base + "-" + "".join(secrets.choice(string.ascii_lowercase + string.digits) for _ in range(6))
+
+def build_mockups(today=None):
+    import shutil
+    today = today or datetime.date.today()
+    live = set()
+    for jf in sorted(MOCK_SRC.glob("*.json")):
+        m = json.loads(jf.read_text())
+        created = datetime.date.fromisoformat(m["created"])
+        expires = created + datetime.timedelta(days=C["mockup_days"])
+        if today > expires: continue
+        slug, trade = m["slug"], m["trade"]
+        t = TBY[trade]
+        out = ROOT / "m" / slug
+        out.mkdir(parents=True, exist_ok=True)
+        imgs = {}
+        for k in ("desktop", "mobile", "before"):
+            src = m.get("images", {}).get(k) if k != "before" else m.get("before")
+            if src:
+                ext = pathlib.Path(src).suffix
+                shutil.copyfile(MOCK_SRC / src, out / f"{k}{ext}")
+                imgs[k] = f"{k}{ext}"
+        live.add(slug)
+        biz = e(m["business"])
+        exp_nice = expires.strftime("%b %-d")
+        tiers = tiers_for(trade)
+        fb = lambda tt: mail(f'Make it live: {m["business"]} ({tt["name"]})')
+        cards = "".join(tier_html(tt, fallback_href=fb) for tt in tiers)
+        before = (f'<figure class="mk-before"><figcaption>Today</figcaption><img src="{imgs["before"]}" alt="{biz} website or listing today" loading="lazy"></figure>'
+                  if "before" in imgs else "")
+        video = (f'<p><a class="btn btn-outline" href="{e(m["video_url"])}" target="_blank" rel="noopener">Watch my 2-minute walkthrough<span class="sr-only"> (opens in a new tab)</span></a></p>'
+                 if m.get("video_url") else "")
+        sample = ('<p class="mk-sample">Sample page: this business is a fictional demo company, shown so you can see what a private mockup page looks like.</p>'
+                  if m.get("sample") else "")
+        hi = f'Hi {e(m["contact_name"])}, ' if m.get("contact_name") else ""
+        body = f"""<div data-expires="{expires.isoformat()}" id="mk">
+<section class="hero page-hero mk-hero">
+  <div class="wrap narrow center">{sample}
+    <h1>{biz}, here's your new homepage.</h1>
+    <p class="lead">{hi}Built for {t["noun"]} in {e(m["city"])}. This link is private and stays up until {exp_nice}.</p>
+  </div>
+</section>
+<section class="section mk-show">
+  <div class="wrap">
+    {before}
+    <figure class="mk-new"><figcaption>{"With WebsitePlz" if before else "Your mockup"}</figcaption>
+      <div class="mk-media"><div class="browser"><div class="browser-bar" aria-hidden="true"><i></i><i></i><i></i><span>Mockup</span></div><img src="{imgs.get('desktop', '')}" width="1200" height="791" alt="{biz} homepage mockup" fetchpriority="high"></div>
+      <div class="phone"><img src="{imgs.get('mobile', '')}" width="390" height="844" alt="{biz} homepage mockup on a phone"></div></div>
+    </figure>
+    <div class="center mk-actions">{video}<a class="btn btn-outline" href="{e(mail(f'Mockup changes: {m["business"]}'))}">Change something first</a></div>
+  </div>
+</section>
+<section class="section alt" id="pricing">
+  <div class="wrap">
+    <div class="head"><p class="kicker">Pricing</p><h2>Make it live</h2>
+    <p class="sub">You only pay the rest at launch, after you've seen the full site.</p></div>
+    <div class="tiers">{cards}</div>
+    {guarantee_block("{root}", compact=True)}
+  </div>
+</section>
+<section class="section"><div class="wrap narrow center"><p class="muted">Questions? Reply to my email or write to {email_link()}.</p></div></section>
+</div>
+<template id="mk-expired"><section class="hero page-hero"><div class="wrap narrow center"><h1>This mockup link has expired.</h1><p class="lead">Want it back? Email <a href="mailto:{C['contact_email']}">{e(C['contact_email'])}</a> and I'll send a fresh one.</p></div></section></template>
+"""
+        simple_page(f"m/{slug}/", f"{m['business']}: your homepage mockup | WebsitePlz", "Private mockup.", body,
+                    noindex=True, bar=False, scripts='<script src="{root}js/mockup.js" defer></script>\n')
+    for d in (ROOT / "m").glob("*") if (ROOT / "m").exists() else []:
+        if d.is_dir() and d.name not in live:
+            shutil.rmtree(d)
+    return live
+
 def build_meta():
     d = C["published"]
-    urls = [p[:-len("index.html")] for p in PAGES]
+    urls = [p[:-len("index.html")] for p in PAGES if p[:-len("index.html")] not in NOINDEX]
     pri = lambda u: "1.0" if u == "" else ("0.9" if u.count("/") == 1 and not u.startswith("blog") else "0.7")
     sm = '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' + "".join(
         f"  <url><loc>{SITE}{u}</loc><lastmod>{d}</lastmod><priority>{pri(u)}</priority></url>\n" for u in urls) + "</urlset>\n"
     (ROOT / "sitemap.xml").write_text(sm)
-    (ROOT / "robots.txt").write_text(f"User-agent: *\nAllow: /\n\nSitemap: {SITE}sitemap.xml\n")
+    (ROOT / "robots.txt").write_text(f"User-agent: *\nAllow: /\nDisallow: /m/\nDisallow: /thanks/\n\nSitemap: {SITE}sitemap.xml\n")
     k = C["indexnow_key"]
     (ROOT / f"{k}.txt").write_text(k)
     return urls
@@ -732,6 +1140,9 @@ def write_headers():
         "  Strict-Transport-Security: max-age=31536000\n  Cross-Origin-Opener-Policy: same-origin\n"
         f"  Content-Security-Policy: {csp}\n"
         "/img/*\n  Cache-Control: public, max-age=604800\n/*.css\n  Cache-Control: public, max-age=86400\n"
+        "/js/*\n  Cache-Control: public, max-age=86400\n"
+        "/m/*\n  X-Robots-Tag: noindex, nofollow\n  ! Referrer-Policy\n  Referrer-Policy: no-referrer\n  Cache-Control: no-store\n"
+        "/thanks/*\n  X-Robots-Tag: noindex, nofollow\n  ! Referrer-Policy\n  Referrer-Policy: no-referrer\n"
         "https://websiteplz.pages.dev/*\n  X-Robots-Tag: noindex\n"
         "https://:project.websiteplz.pages.dev/*\n  X-Robots-Tag: noindex\n")
 
@@ -743,6 +1154,10 @@ if __name__ == "__main__":
     for t in TRADES: build_trade(t)
     build_blog_index()
     for p in POSTS: build_post(p)
+    build_legal()
+    build_guide()
+    build_thanks()
+    mocks = build_mockups()
     urls = build_meta()
     write_headers()
-    print(f"wrote {len(PAGES)} pages:", ", ".join("/" + u for u in urls))
+    print(f"wrote {len(PAGES)} pages ({len(urls)} in sitemap, {len(mocks)} live mockups):", ", ".join("/" + u for u in urls))

@@ -3,9 +3,38 @@
 Static promo site for WebsitePlz (home, 5 trade pages, blog). No build tooling needed beyond Python 3.
 
 - Edit prices / contact / checkout links in `CONFIG` at the top of `build.py`, then run `python3 build.py` (regenerates every page, sitemap.xml, robots.txt and the IndexNow key file).
-- **Buy buttons:** `CONFIG["checkout_links"]` holds one URL per package (starter, emergency, emergency-care, care-monthly, care-quarterly, care-yearly). Empty = the button scrolls to the contact form with that package preselected.
+- **Buy buttons:** `CONFIG["checkout_links"]` holds one URL per package (starter, emergency, emergency-care, care-monthly, care-quarterly, care-yearly). Empty = "Buy now" scrolls to the contact form with that package preselected; set = "Pay $X to start".
 - **Brand:** `img/logo.svg`, `img/logo-light.svg`, favicons and `img/og.png` (rendered from `tools/og.html`). `tools/brand.py` regenerates the logo/favicons. Fonts (Bricolage Grotesque + Inter, OFL) are self-hosted in `img/fonts/`.
 - Portfolio screenshots `img/<slug>-desktop(-640).webp` / `-mobile.webp` come from `/workspace/emergency-site/shots/`.
+
+## Upgrade (Oct 4, 2026): offer, guarantee, mockups, legal pages
+Built from `/workspace/emergency-site/upgrade_build_list.md`. Pricing is still in `CONFIG` only:
+- 50% deposit (`deposit_pct`) shown on every card ("Pay $124.50 today, $124.50 at launch"); badge text `featured_label`;
+  the $1,495 bundle has `care_months: 6` and its "Saves $224" line is computed (site + 6 x Monthly Care - bundle).
+- New pages: `/terms/`, `/privacy/`, `/refunds/` (in sitemap), `/guides/google-business-profile-checklist/` (in sitemap),
+  `/thanks/mockup/`, `/thanks/order/` and `/m/<slug>/` (noindex, nofollow, no-referrer, not in sitemap, disallowed in robots.txt).
+- JavaScript beyond the inline form script lives in `/js/` (`calc.js`, `mockup.js`, `print.js`), allowed by CSP `script-src 'self'`.
+  The inline form script's sha256 is recomputed into `_headers` on every build.
+- Private mockups: see `content/mockups/README.md`. Prospect JSON/images and the `m/` output are git-ignored (public repo).
+- Manual steps (mockup SOP, email templates, launch checklist): `docs/playbook.md`.
+
+### ⚠️ Legal wording needs Joshua's review (BL-8)
+`/terms/`, `/privacy/` and `/refunds/` are plain-English drafts written from the build list. **Joshua must review the wording
+before Stripe goes live** (Stripe's terms checkbox will point at `/terms/`). Defaults used, pending confirmation (BL-10):
+"5 days" = 5 calendar days from the last checklist item; Annual Refresh doesn't auto-renew. Also check: refund timing
+("within 2 business days"), the Stripe customer-portal cancellation line, and the data-deletion line in Privacy.
+
+### Switching on the blocked items
+| Item | What Joshua provides | How to switch it on |
+|---|---|---|
+| Form delivery (BL-1, M-1) | Token with **Workers Scripts Edit** (+ Pages binding edit) | Deploy `workers/contact-mailer` (`cd workers/contact-mailer && npx -y wrangler@3 deploy`), add Service binding `MAILER` -> `websiteplz-contact-mailer` in Pages > Settings > Bindings, then set `CONFIG["form_delivery_live"] = True` and run `tools/deploy.sh`. Until then forms skip the network call and offer the prefilled email (no 503 errors). Successful mockup requests then redirect to `/thanks/mockup/`. |
+| Stripe (BL-2, PP-3) | 3 deposit Payment Links ($124.50 / $562.50 / $747.50), 3 Care links (Annual as a one-time $990), customer portal, Terms URL `https://websiteplz.com/terms/`, success URL `https://websiteplz.com/thanks/order/` | Paste URLs into `CONFIG["checkout_links"]`. Site-package buttons become "Pay $X to start" (same tab), Care buttons open their links, and `/m/` "Make it live" buttons go to Stripe instead of a prefilled email. Don't go live before the legal pages are approved. |
+| P.O. box (BL-3) | Mailing address | `CONFIG["postal_address"] = "..."` (shows in the footer). Then emails 3–5 in `docs/playbook.md` can be sent. |
+| Founder photo (BL-4) | Real square photo, 600px+ | Save as `img/joshua.jpg`, set `CONFIG["founder_photo"] = "img/joshua.jpg"`. Until then the founder block is text-only (no stock or AI image). |
+| Intro video (BL-5) | 60-second-or-shorter video link | `CONFIG["founder_video_url"] = "https://..."` (link opens in a new tab; no iframes, CSP has no frame-src). |
+| Mockup walkthroughs (BL-6) | Loom account | Put the link in the mockup JSON `video_url`. |
+| Fiverr/Contra (BL-11, GR-7) | Profile URLs | `CONFIG["fiverr_url"]`, `CONFIG["contra_url"]` (footer + forms show the links). |
+| Visitor auto-reply (BL-7, M-6) | Workers Paid + Cloudflare Email Service | Copy is in `docs/playbook.md`; not built. |
 
 ## Contact form (`/api/contact`)
 - `functions/api/contact.js` is a Cloudflare Pages Function. It validates input, has a honeypot (`company_fax`), a 3-second time trap and a rate limit (5 per 10 min per IP; per-isolate unless a `RATE_KV` KV binding is added).
@@ -42,7 +71,7 @@ serves fresh assets. The token can't purge cache (no Cache Purge permission).
 - `/` home (trade chooser + general sales), `/hvac/`, `/plumbing/`, `/electrical/` (uses the Ridge Line demo, labeled),
   `/pressure-washing/`, `/cleaning/`, `/blog/` + one article per trade. Trade copy: `content/trades.py`;
   articles: `content/blog.py` + `content/blog/<slug>.html`.
-- Every page is indexable (only 404.html is noindex). robots.txt allows all and lists the sitemap; sitemap.xml
+- Every public page is indexable (404.html, /thanks/* and /m/* are noindex). robots.txt allows all and lists the sitemap; sitemap.xml
   lists every page with lastmod (`CONFIG["published"]`). Canonicals are absolute https://websiteplz.com/ URLs.
 - JSON-LD: Organization, WebSite, ProfessionalService (no address/phone) and FAQPage on home; Service, FAQPage,
   BreadcrumbList on trade pages; Blog and BlogPosting on the blog.
