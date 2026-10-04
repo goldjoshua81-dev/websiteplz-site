@@ -129,6 +129,16 @@ PACKAGES = [(t["id"], f'{t["name"]} ({money(t["price"])})') for t in C["tiers"]]
     ("care-yearly", f"Annual Refresh ({money(care_y)}/yr)"),
     ("not-sure", "Not sure yet / just a question"),
 ]
+# Cleaning and pressure washing call the $1,125 tier "Booking-ready" (approved by Joshua, Oct 4, 2026).
+# Same price and contents; internal ids ("emergency", "emergency-care") stay so the form API is unchanged.
+BOOKING_TRADES = {"cleaning", "pressure-washing"}
+def tiers_for(slug=None):
+    if slug not in BOOKING_TRADES: return C["tiers"]
+    return [dict(t, name=t["name"].replace("Emergency-ready", "Booking-ready"),
+                 items=[x.replace("Emergency-ready", "Booking-ready") for x in t["items"]]) for t in C["tiers"]]
+def packages_for(slug=None):
+    return [(t["id"], f'{t["name"]} ({money(t["price"])})') for t in tiers_for(slug)] + PACKAGES[len(C["tiers"]):]
+
 ORG = {"@type": "Organization", "@id": SITE + "#org", "name": "WebsitePlz", "url": SITE,
        "logo": SITE + "img/icon-512.png", "email": C["contact_email"]}
 
@@ -252,15 +262,15 @@ def tier_html(t):
             f'<p class="tier-blurb">{e(t["blurb"])}</p><ul class="checks">{items}</ul>'
             f'{buy_btn(t["id"], t["name"], "btn-primary" if t["featured"] else "btn-outline")}</article>')
 
-def pricing_sections():
-    tiers = "".join(tier_html(t) for t in C["tiers"])
+def pricing_sections(slug=None, note=""):
+    tiers = "".join(tier_html(t) for t in tiers_for(slug))
     li = lambda xs: "".join(f'<li>{ic("check")}<span>{x}</span></li>' for x in xs)
     return f"""<section class="section" id="pricing">
   <!-- Prices come from CONFIG in build.py. Do not edit here; run build.py. -->
   <div class="wrap">
     <div class="head"><p class="kicker">Pricing</p><h2>Simple, one-time pricing</h2>
     <p class="sub">Pay once for the site. Care is optional. Not sure yet? <a class="text-link inline" href="#mockup">Get a free mockup first.</a></p></div>
-    <div class="tiers">{tiers}</div>
+    <div class="tiers">{tiers}</div>{note}
   </div>
 </section>
 
@@ -308,8 +318,8 @@ def faq_section(items, kicker="FAQ", h="Questions"):
 def opts(values, selected=""):
     return "".join(f'<option{" selected" if v == selected else ""}>{v}</option>' for v in values)
 
-def forms_section(r, trade_opt=""):
-    pk = "".join(f'<option value="{pid}"{" selected" if pid == "not-sure" else ""}>{lbl}</option>' for pid, lbl in PACKAGES)
+def forms_section(r, trade_opt="", slug=None):
+    pk = "".join(f'<option value="{pid}"{" selected" if pid == "not-sure" else ""}>{lbl}</option>' for pid, lbl in packages_for(slug))
     plat = ""
     if C["fiverr_url"]: plat += f'<a class="btn btn-outline-light" href="{e(C["fiverr_url"])}" rel="noopener">Order on Fiverr</a>'
     if C["contra_url"]: plat += f'<a class="btn btn-outline-light" href="{e(C["contra_url"])}" rel="noopener">Hire on Contra</a>'
@@ -543,7 +553,7 @@ def build_home():
     <p class="center more"><a class="text-link" href="{C['samples_base']}" target="_blank" rel="noopener">All samples<span class="sr-only"> (opens in a new tab)</span> {ic("arrow")}</a></p>
   </div>
 </section>
-{included_section(INCLUDED)}{how_section()}{pricing_sections()}{faq_section(FAQ)}{blog_teaser(r, POSTS[:3])}{forms_section(r)}</main>
+{included_section(INCLUDED)}{how_section()}{pricing_sections(note='<p class="small muted center fine">Cleaning or pressure washing? The same packages are called Booking-ready on the <a class="text-link inline" href="cleaning/#pricing">cleaning</a> and <a class="text-link inline" href="pressure-washing/#pricing">pressure washing</a> pages.</p>')}{faq_section(FAQ)}{blog_teaser(r, POSTS[:3])}{forms_section(r)}</main>
 """ + footer(r, "") + FORM_JS + "</body>\n</html>\n"
     write("index.html", page)
 
@@ -556,7 +566,7 @@ def build_trade(t):
         ORG,
         {"@type": "Service", "name": f'Websites for {t["noun"]} businesses', "serviceType": "Website design",
          "url": SITE + path, "provider": {"@id": SITE + "#org"}, "description": t["desc"],
-         "offers": [{"@type": "Offer", "name": x["name"], "price": x["price"], "priceCurrency": "USD"} for x in C["tiers"]]},
+         "offers": [{"@type": "Offer", "name": x["name"], "price": x["price"], "priceCurrency": "USD"} for x in tiers_for(t["slug"])]},
         {"@type": "FAQPage", "mainEntity": [{"@type": "Question", "name": q, "acceptedAnswer": {"@type": "Answer", "text": strip(a)}} for q, a in faq]},
         {"@type": "BreadcrumbList", "itemListElement": [
             {"@type": "ListItem", "position": 1, "name": "Home", "item": SITE},
@@ -602,14 +612,14 @@ def build_trade(t):
     </div>
   </div>
 </section>
-{included_section(t["includes"], h=f'What your {t["noun"]} site includes', sub=t["included_sub"])}{how_section()}{pricing_sections()}{faq_section(faq, h=f'{t["label"]} website questions')}
+{included_section(t["includes"], h=f'What your {t["noun"]} site includes', sub=t["included_sub"])}{how_section()}{pricing_sections(t["slug"])}{faq_section(faq, h=f'{t["label"]} website questions')}
 <section class="section alt" id="blog">
   <div class="wrap">
     <div class="head"><p class="kicker">Guide</p><h2>Read before you build</h2></div>
     <div class="post-grid one">{blog_cards(r, [post])}</div>
   </div>
 </section>
-{forms_section(r, t["option"])}
+{forms_section(r, t["option"], t["slug"])}
 <section class="section other-trades" aria-labelledby="other-h">
   <div class="wrap center"><h2 id="other-h" class="h-sm">Other trades we build for</h2><ul class="trades dark">{others}</ul></div>
 </section>
