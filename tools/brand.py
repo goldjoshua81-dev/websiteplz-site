@@ -1,5 +1,5 @@
 """WebsitePlz brand assets: logo.svg (outlined wordmark), logo-light.svg, favicon.svg,
-favicon.ico, apple-touch-icon.png, img/icon-512.png. Run: python3 tools/brand.py
+favicon.ico, apple-touch-icon.png, img/icon-512.png, img/icon-192.png. Run: python3 tools/brand.py
 Needs fontTools + the Bricolage Grotesque font (OFL) at G below; output is committed."""
 import os,subprocess,io
 from fontTools.ttLib import TTFont
@@ -39,7 +39,7 @@ if __name__=='__main__':
     _,ll=logo(True);open(f'{ROOT}/img/logo-light.svg','w').write(ll)
     fav=f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">{icon("f")}</svg>'
     open(f'{ROOT}/favicon.svg','w').write(fav)
-    png(fav,180,f'{ROOT}/apple-touch-icon.png'); png(fav,512,f'{ROOT}/img/icon-512.png'); png(fav,256,'/tmp/_ico.png')
+    png(fav,180,f'{ROOT}/apple-touch-icon.png'); png(fav,512,f'{ROOT}/img/icon-512.png'); png(fav,192,f'{ROOT}/img/icon-192.png'); png(fav,256,'/tmp/_ico.png')
     from PIL import Image
     Image.open('/tmp/_ico.png').save(f'{ROOT}/favicon.ico',sizes=[(16,16),(32,32),(48,48)])
     print('logo width',W)
