@@ -135,7 +135,7 @@ BOOKING_TRADES = {"cleaning", "pressure-washing"}
 def tiers_for(slug=None):
     if slug not in BOOKING_TRADES: return C["tiers"]
     return [dict(t, name=t["name"].replace("Emergency-ready", "Booking-ready"),
-                 items=[x.replace("Emergency-ready", "Booking-ready") for x in t["items"]]) for t in C["tiers"]]
+                 items=[x.replace("Emergency-ready", "Booking-ready").replace("Financing, license and insured lines", "Financing and insured/bonded lines") for x in t["items"]]) for t in C["tiers"]]
 def packages_for(slug=None):
     return [(t["id"], f'{t["name"]} ({money(t["price"])})') for t in tiers_for(slug)] + PACKAGES[len(C["tiers"]):]
 
