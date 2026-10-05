@@ -198,7 +198,8 @@ def browser(r, slug, name, eager=False, label="Sample site", sizes="(min-width:1
 
 def phone(r, slug, name, eager=False):
     load = '' if eager else 'loading="lazy" decoding="async"'
-    return (f'<div class="phone"><img src="{r}img/{slug}-mobile.webp" width="390" height="844" {load} '
+    return (f'<div class="phone"><img src="{r}img/{slug}-mobile.webp" srcset="{r}img/{slug}-mobile-260.webp 260w, {r}img/{slug}-mobile.webp 390w" '
+            f'sizes="(min-width:768px) 190px, 28vw" width="390" height="844" {load} '
             f'alt="{name} demo site on a phone, with the sticky call bar"></div>')
 
 def device(r, slug, name, eager=False, phone_slug=None, phone_name=None, note="Demo sites for fictional companies"):
@@ -1146,8 +1147,8 @@ def write_headers():
         "  X-Frame-Options: DENY\n  Permissions-Policy: camera=(), microphone=(), geolocation=()\n"
         "  Strict-Transport-Security: max-age=31536000\n  Cross-Origin-Opener-Policy: same-origin\n"
         f"  Content-Security-Policy: {csp}\n"
-        "/img/*\n  Cache-Control: public, max-age=31536000\n/*.css\n  Cache-Control: public, max-age=86400\n"
-        "/js/*\n  Cache-Control: public, max-age=86400\n"
+        "/img/*\n  Cache-Control: public, max-age=31536000\n/*.css\n  Cache-Control: public, max-age=31536000, immutable\n"
+        "/js/*\n  Cache-Control: public, max-age=31536000, immutable\n"
         "/m/*\n  X-Robots-Tag: noindex, nofollow\n  ! Referrer-Policy\n  Referrer-Policy: no-referrer\n  Cache-Control: no-store\n"
         "/thanks/*\n  X-Robots-Tag: noindex, nofollow\n  ! Referrer-Policy\n  Referrer-Policy: no-referrer\n"
         "https://websiteplz.pages.dev/*\n  X-Robots-Tag: noindex\n"
