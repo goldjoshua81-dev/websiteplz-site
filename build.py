@@ -190,7 +190,7 @@ def buy_btn(pid, name, cls, label="Buy now", paid_label=None, fallback_href=None
         return f'<a class="btn {cls} btn-block" href="{e(fallback_href)}">{fallback_label or label}{sr}</a>'
     return f'<a class="btn {cls} btn-block" href="#contact" data-package="{pid}">{label}{sr}</a>'
 
-def browser(r, slug, name, eager=False, label="Sample site", sizes="(min-width:1024px) 560px, (min-width:768px) 46vw, 92vw"):
+def browser(r, slug, name, eager=False, label="Sample site", sizes="(min-width:1024px) 560px, (min-width:768px) 46vw, calc(100vw - 72px)"):
     load = 'fetchpriority="high"' if eager else 'loading="lazy" decoding="async"'
     return (f'<div class="browser"><div class="browser-bar" aria-hidden="true"><i></i><i></i><i></i><span>{label}</span></div>'
             f'<img src="{r}img/{slug}-desktop.webp" srcset="{r}img/{slug}-desktop-640.webp 640w, {r}img/{slug}-desktop.webp 1200w" '
@@ -754,7 +754,7 @@ def build_trade(t):
 {calc_section(r, t)}
 <section class="section alt" id="samples">
   <div class="wrap demo-show">
-    <div class="demo-media">{browser(r, t["demo"], t["demo_name"], label="Live demo", sizes="(min-width:1024px) 600px, 92vw")}{phone(r, t["demo"], t["demo_name"])}</div>
+    <div class="demo-media">{browser(r, t["demo"], t["demo_name"], label="Live demo", sizes="(min-width:1024px) 600px, calc(100vw - 72px)")}{phone(r, t["demo"], t["demo_name"])}</div>
     <div class="demo-copy">
       <p class="kicker">Our work</p><h2>{t["demo_h"]}</h2>
       <p class="sub">{t["demo_note"]} Open it on your phone and tap around.</p>
