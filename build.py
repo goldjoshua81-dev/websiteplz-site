@@ -476,6 +476,7 @@ def forms_section(r, trade_opt="", slug=None):
         </details>
         {hp}
         <button class="btn btn-primary btn-lg btn-block" type="submit" data-label="Send me my mockup">Send me my mockup</button>
+        <p class="form-fine">I reply within 1 business day, usually sooner. No spam, no pushy sales calls.</p>
         <p class="form-fine">You'll get a private link that stays up for {C['mockup_days']} days. {req} Required. I only use your details to reply to you.</p>
         {status}
       </form>
@@ -495,6 +496,7 @@ def forms_section(r, trade_opt="", slug=None):
         <label>Message <span class="opt">(required if you didn't pick a package)</span><textarea name="message" rows="4" maxlength="3000" placeholder="Your question, the cities you serve, anything else."></textarea></label>
         {hp}
         <button class="btn btn-outline btn-lg btn-block" type="submit" data-label="Send message">Send message</button>
+        <p class="form-fine">I reply within 1 business day, usually sooner. No spam, no pushy sales calls.</p>
         <p class="form-fine">{req} Required. Prefer email? <a href="{mailto}">{e(C["contact_email"])}</a></p>
         {status}
       </form>
@@ -506,7 +508,7 @@ def forms_section(r, trade_opt="", slug=None):
 
 FORM_JS = """<script>
 (function(){var LIVE=__LIVE__;function lab(el){var l=el.closest('label');return l&&l.firstChild&&l.firstChild.nodeType===3?l.firstChild.textContent.replace(/\\s*\\(.*$/,'').trim():el.name;}
-function fallback(f){var L=[];Array.prototype.forEach.call(f.querySelectorAll('input,select,textarea'),function(el){if(el.type==='hidden'||el.name==='company_fax'||!el.value.trim())return;var n=lab(el);var v=el.tagName==='SELECT'?el.options[el.selectedIndex].text:el.value.trim();L.push(n+': '+v);});var sub=f.type.value==='mockup'?'Free mockup request':'Website question';var href='mailto:__EMAIL__?subject='+encodeURIComponent(sub)+'&body='+encodeURIComponent(L.join('\\n'));return 'My form isn\\u2019t taking messages right now, so nothing was sent. <a href="'+href.replace(/"/g,'%22')+'">Email your details instead</a> (it\\u2019s prefilled for you) or write to <a href="__MAILTO__">__EMAIL__</a>.';}
+function fallback(f){var L=[];Array.prototype.forEach.call(f.querySelectorAll('input,select,textarea'),function(el){if(el.type==='hidden'||el.name==='company_fax'||!el.value.trim())return;var n=lab(el);var v=el.tagName==='SELECT'?el.options[el.selectedIndex].text:el.value.trim();L.push(n+': '+v);});var sub=f.type.value==='mockup'?'Free mockup request':'Website question';var href='mailto:__EMAIL__?subject='+encodeURIComponent(sub)+'&body='+encodeURIComponent(L.join('\\n'));return 'My form isn\\u2019t taking messages right now, so nothing was sent. <a href="'+href.replace(/"/g,'%22')+'">Email your details instead</a> (it\\u2019s prefilled for you) or write to <a href="__MAILTO__">__EMAIL__</a>. I reply within 1 business day.';}
 document.addEventListener('click',function(ev){var a=ev.target.closest&&ev.target.closest('[data-package]');if(!a)return;var s=document.querySelector('#contact .f-package');if(s)s.value=a.getAttribute('data-package');});
 Array.prototype.forEach.call(document.querySelectorAll('.js-form'),function(f){var st=f.querySelector('.form-status'),btn=f.querySelector('button[type=submit]');f.t.value=Date.now();
 function show(m,ok){st.className='form-status '+(ok?'ok':'err');st.innerHTML=m;st.focus();}
