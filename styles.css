@@ -175,7 +175,7 @@ details p{color:var(--muted);margin:0 0 20px}
 .foot nav a:hover{text-decoration:underline}
 .foot-fine{padding-top:20px;font-size:.85rem}
 .foot-fine p{margin:0 0 6px}
-.mobile-bar{position:fixed;left:0;right:0;bottom:0;z-index:60;display:grid;grid-template-columns:1fr 1.4fr;gap:10px;padding:10px 12px calc(10px + env(safe-area-inset-bottom));background:rgba(255,255,255,.96);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-top:1px solid var(--line);box-shadow:0 -8px 24px -12px rgba(11,27,46,.25)}
+.mobile-bar{position:fixed;left:0;right:0;bottom:0;z-index:60;display:grid;grid-template-columns:1fr 1.4fr;gap:10px;padding:10px 12px calc(10px + env(safe-area-inset-bottom));background:rgba(255,255,255,.98);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-top:1px solid rgba(11,27,46,.14);box-shadow:0 -10px 28px -10px rgba(11,27,46,.32)}
 .mobile-bar .btn{min-height:48px}
 /* breakpoints */
 @media (max-width:400px){.wrap,.narrow{width:calc(100% - 32px)}.bar .btn-sm{padding:8px 12px;font-size:.9rem}.logo img{height:34px}.hero{padding-top:40px}.btn-lg{width:100%}.sample-media{padding:18px 18px 0}.sample-body{padding:20px}.tier{padding:24px}}

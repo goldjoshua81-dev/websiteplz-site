@@ -6,3 +6,6 @@ content/mockups/*.json
 !content/mockups/_sample-*.json
 content/mockups/img/*
 !content/mockups/img/sample-*
+
+# Cloudflare Web Analytics daily snapshots (lane ops; not public)
+stats/

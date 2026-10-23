@@ -274,7 +274,7 @@ def footer(r, here, bar=True):
     if C["contra_url"]: plat += f'<a href="{e(C["contra_url"])}" rel="noopener">Hire me on Contra</a>'
     plat = f'<p class="foot-plat">{plat}</p>' if plat else ""
     addr = f'<p class="foot-addr">{e(C["postal_address"])}</p>' if C["postal_address"] else ""
-    mbar = (f'<div class="mobile-bar mbar"><a class="btn btn-outline btn-block" href="{mob_buy}">Buy now</a>'
+    mbar = (f'<div class="mobile-bar mbar"><a class="btn btn-outline btn-block" href="{mob_buy}">See packages</a>'
             f'<a class="btn btn-primary btn-block" href="{mob_mock}">Free mockup</a></div>\n') if bar else ""
     return f"""<footer class="foot{'' if bar else ' nobar'}">
   <div class="wrap foot-grid">
@@ -300,7 +300,7 @@ def three_paths(r, here="", light=True, label="Get a free mockup"):
     ct = "#contact" if here in ("", "trade") else f"{r}#contact"
     q = "btn-outline-light" if light else "btn-outline"
     return (f'<div class="cta-row paths"><a class="btn btn-primary btn-lg" href="{mk}">{label} {ic("arrow")}</a>'
-            f'<a class="btn {q} btn-lg" href="{pr}">Buy now</a>'
+            f'<a class="btn {q} btn-lg" href="{pr}">See packages</a>'
             f'<a class="text-link {"on-dark" if light else ""}" href="{ct}">Ask a question</a></div>')
 
 def tier_html(t, fallback_href=None):
@@ -615,7 +615,7 @@ SPRITE = '<svg width="0" height="0" style="position:absolute" aria-hidden="true"
 # ---------------------------------------------------------------- pages
 def trade_chooser(r):
     cards = "".join(f'<a class="trade-card" href="{r}{t["slug"]}/">{ic(t["icon"], "i tc-ico")}<b>{t["label"]}</b>'
-                    f'<span>{e(strip(t["eyebrow"]).replace("Websites for ", "Sites for "))}</span><span class="tc-go" aria-hidden="true">{ic("arrow")}</span></a>' for t in TRADES)
+                    f'<span>{e(t.get("card") or strip(t["eyebrow"]).replace("Websites for ", "Sites for "))}</span><span class="tc-go" aria-hidden="true">{ic("arrow")}</span></a>' for t in TRADES)
     return f"""<section class="section chooser" id="trades">
   <div class="wrap">
     <div class="head"><p class="kicker">Pick your trade</p><h2>Built for your kind of work</h2>
