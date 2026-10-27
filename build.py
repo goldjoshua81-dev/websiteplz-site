@@ -45,7 +45,7 @@ CONFIG = {
     # --- FEATURE FLAGS for things Joshua still has to provide (see README "Switching on") ----
     # BL-1 form delivery: False = forms skip the network call and go straight to the prefilled-email
     # fallback (no 503 errors). Set True once the MAILER (or SUBMISSIONS) binding is live on Pages.
-    "form_delivery_live": False,
+    "form_delivery_live": True,
     # BL-3 postal address (P.O. box) for the footer; empty = hidden.
     "postal_address": "",
     # BL-4 founder photo, e.g. "img/joshua.jpg" (real photo, square, 600px+); empty = text-only block.
